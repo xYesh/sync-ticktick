@@ -10,10 +10,10 @@ export class TickTickSync {
 	}
 
 	public async sync(): Promise<void> {
-		const { username, password, listMappings } = this.plugin.settings;
+		const { cookie, listMappings } = this.plugin.settings;
 		
-		if (!username || !password) {
-			new Notice('TickTick Sync: Username or password not set in settings.');
+		if (!cookie) {
+			new Notice('TickTick Sync: Not logged in. Please log in via settings.');
 			return;
 		}
 
@@ -23,12 +23,8 @@ export class TickTickSync {
 		}
 
 		try {
-			new Notice('TickTick Sync: Logging in...');
-			const loggedIn = await this.api.login(username, password);
-			if (!loggedIn) {
-				new Notice('TickTick Sync: Failed to log in to TickTick. Check credentials.');
-				return;
-			}
+			// Apply the stored cookie directly to the API
+			this.api.setCookie(cookie);
 
 			new Notice('TickTick Sync: Syncing tasks...');
 			const projects = await this.api.getProjects();

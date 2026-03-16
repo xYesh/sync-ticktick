@@ -9,16 +9,16 @@ export interface TickTickListMapping {
 }
 
 export interface TickTickSyncSettings {
-	username: string;
-	password: string;
+	cookie: string;
 	listMappings: TickTickListMapping[];
 	// Deprecated, keeping temporarily for migration
 	listMapping?: string; 
+	username?: string; // Deprecated
+	password?: string; // Deprecated
 }
 
 export const DEFAULT_SETTINGS: TickTickSyncSettings = {
-	username: '',
-	password: '',
+	cookie: '',
 	listMappings: [],
 };
 
@@ -43,50 +43,55 @@ export class TickTickSettingTab extends PluginSettingTab {
 
 		containerEl.createEl('h2', { text: 'TickTick Sync Settings' });
 
-		new Setting(containerEl)
-			.setName('TickTick Username')
-			.setDesc('Your TickTick account email/username')
-			.addText(text => text
-				.setPlaceholder('Enter your username')
-				.setValue(this.plugin.settings.username)
-				.onChange(async (value) => {
-					this.plugin.settings.username = value;
-					await this.plugin.saveSettings();
-				}));
+		if (this.plugin.settings.cookie) {
+			containerEl.createEl('div', { 
+				text: '✅ Logged in to TickTick', 
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-success); margin-bottom: 18px;' }
+			});
+		} else {
+			containerEl.createEl('div', { 
+				text: '❌ Not logged in', 
+				cls: 'setting-item-description',
+				attr: { style: 'color: var(--text-error); margin-bottom: 18px;' }
+			});
+		}
 
 		new Setting(containerEl)
-			.setName('TickTick Password')
-			.setDesc('Your TickTick account password')
-			.addText(text => text
-				.setPlaceholder('Enter your password')
-				.setValue(this.plugin.settings.password)
-				.onChange(async (value) => {
-					this.plugin.settings.password = value;
-					await this.plugin.saveSettings();
-				})).settingEl.querySelector('input')?.setAttribute('type', 'password');
-
-		new Setting(containerEl)
-			.setName('Fetch TickTick Lists')
-			.setDesc('Log in to TickTick and fetch your lists for mapping')
+			.setName('TickTick Authentication')
+			.setDesc('Log in to TickTick securely to fetch your lists for mapping. This will open a browser window.')
 			.addButton(button => button
-				.setButtonText('Fetch Lists')
+				.setButtonText(this.plugin.settings.cookie ? 'Refresh Login' : 'Log In & Fetch Lists')
 				.onClick(async () => {
-					button.setButtonText('Fetching...');
+					button.setButtonText('Authenticating...');
 					try {
-						const loggedIn = await this.api.login(this.plugin.settings.username, this.plugin.settings.password);
-						if (!loggedIn) {
-							new Notice('TickTick login failed. Check credentials.');
-							button.setButtonText('Fetch Lists');
+						const cookie = await this.api.loginViaDesktop();
+						if (!cookie || !cookie.value) {
+							new Notice('TickTick login cancelled or failed.');
+							button.setButtonText(this.plugin.settings.cookie ? 'Refresh Login' : 'Log In & Fetch Lists');
 							return;
 						}
+						
+						// Save the cookie
+						this.plugin.settings.cookie = cookie.name + '=' + cookie.value;
+						// Clear out old credentials if they exist
+						delete this.plugin.settings.username;
+						delete this.plugin.settings.password;
+						await this.plugin.saveSettings();
+						
+						// Test authentication by fetching projects
+						button.setButtonText('Fetching lists...');
+						this.api.setCookie(this.plugin.settings.cookie);
 						this.projects = await this.api.getProjects();
+						
 						new Notice(`Fetched ${this.projects.length} lists successfully.`);
-						this.renderSettings(); // Re-render to update the mapping dropdowns
+						this.renderSettings(); // Re-render to update the mapping dropdowns and login status
 					} catch (e) {
 						console.error(e);
-						new Notice('Error fetching lists.');
+						new Notice('Error during authentication or fetching lists.');
 					} finally {
-						button.setButtonText('Fetch Lists');
+						// Render settings already resets the button, but just in case
+						button.setButtonText(this.plugin.settings.cookie ? 'Refresh Login' : 'Log In & Fetch Lists');
 					}
 				}));
 
