@@ -34,6 +34,24 @@ export default class TickTickSyncPlugin extends Plugin {
 
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
+		
+		// Migration from string mapping to array mapping
+		if (this.settings.listMapping && (!this.settings.listMappings || this.settings.listMappings.length === 0)) {
+			console.log('TickTick Sync: Migrating list mapping settings format');
+			const mappings = this.settings.listMapping.split('\n')
+				.map(line => line.trim())
+				.filter(line => line.includes('->'))
+				.map(line => {
+					const parts = line.split('->');
+					return {
+						listId: '',
+						listName: (parts[0] || '').trim(),
+						folder: (parts[1] || '').trim()
+					};
+				});
+			this.settings.listMappings = mappings;
+			await this.saveSettings();
+		}
 	}
 
 	async saveSettings() {

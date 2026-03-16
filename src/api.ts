@@ -37,6 +37,10 @@ export class TickTickAPI {
 				method: 'POST',
 				headers: {
 					'Content-Type': 'application/json',
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/'
 				},
 				body: JSON.stringify({
 					username,
@@ -81,6 +85,10 @@ export class TickTickAPI {
 				method: 'GET',
 				headers: {
 					'Cookie': this.cookie,
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/'
 				},
 			});
 
@@ -105,6 +113,10 @@ export class TickTickAPI {
 				method: 'GET',
 				headers: {
 					'Cookie': this.cookie,
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/'
 				},
 			});
 
@@ -128,6 +140,10 @@ export class TickTickAPI {
 				method: 'GET',
 				headers: {
 					'Cookie': this.cookie,
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/'
 				},
 			});
 

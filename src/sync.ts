@@ -10,14 +10,14 @@ export class TickTickSync {
 	}
 
 	public async sync(): Promise<void> {
-		const { username, password, listMapping } = this.plugin.settings;
+		const { username, password, listMappings } = this.plugin.settings;
 		
 		if (!username || !password) {
 			new Notice('TickTick Sync: Username or password not set in settings.');
 			return;
 		}
 
-		if (!listMapping?.trim()) {
+		if (!listMappings || listMappings.length === 0) {
 			new Notice('TickTick Sync: List mappings not configured.');
 			return;
 		}
@@ -34,44 +34,38 @@ export class TickTickSync {
 			const projects = await this.api.getProjects();
 			
 			// Parse mappings: "TickTick Name -> Obsidian Folder"
-			const mappings = listMapping.split('\n')
-				.map(line => line.trim())
-				.filter(line => line.includes('->'))
-				.map(line => {
-					const parts = line.split('->');
-					return {
-						ticktickList: (parts[0] || '').trim(),
-						obsidianFolder: normalizePath((parts[1] || '').trim())
-					};
-				});
-
-			for (const mapping of mappings) {
-				const project = projects.find(p => p.name.toLowerCase() === mapping.ticktickList.toLowerCase());
+			for (const mapping of listMappings) {
+				// Fallback to name match if we don't have listId but have listName
+				let project = mapping.listId 
+					? projects.find(p => p.id === mapping.listId)
+					: projects.find(p => p.name.toLowerCase() === (mapping.listName || '').toLowerCase());
+				
 				let projectId = '';
 				
-				if (!project && mapping.ticktickList.toLowerCase() === 'inbox') {
+				if (!project && (mapping.listName || '').toLowerCase() === 'inbox') {
 					projectId = 'inbox'; // Inbox is often implicitly 'inbox' depending on API
 				} else if (project) {
 					projectId = project.id;
 				}
 
 				if (!projectId) {
-					console.warn(`TickTick project not found for mapping: ${mapping.ticktickList}`);
+					console.warn(`TickTick project not found for mapping: ${mapping.listName || mapping.listId}`);
 					continue;
 				}
 
-				await this.ensureFolderExists(mapping.obsidianFolder);
+				const folderPath = normalizePath(mapping.folder);
+				await this.ensureFolderExists(folderPath);
 
 				// Sync active tasks
 				const tasks = await this.api.getTasksByProjectId(projectId);
 				for (const task of tasks) {
-					await this.createTaskFileIfNotExists(task, mapping.obsidianFolder);
+					await this.createTaskFileIfNotExists(task, folderPath);
 				}
 
 				// Sync completed tasks
 				const completedTasks = await this.api.getCompletedTasksByProjectId(projectId);
 				for (const completedTask of completedTasks) {
-					await this.moveTaskToDone(completedTask, mapping.obsidianFolder);
+					await this.moveTaskToDone(completedTask, folderPath);
 				}
 			}
 
