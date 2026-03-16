@@ -1,90 +1,108 @@
-# Obsidian Sample Plugin
+# Sync TickTick
 
-This is a sample plugin for Obsidian (https://obsidian.md).
+An Obsidian community plugin that syncs your TickTick tasks into your vault as individual Markdown notes with rich YAML frontmatter.
 
-This project uses TypeScript to provide type checking and documentation.
-The repo depends on the latest plugin API (obsidian.d.ts) in TypeScript Definition format, which contains TSDoc comments describing what it does.
+## Features
 
-This sample plugin demonstrates some of the basic functionality the plugin API can do.
-- Adds a ribbon icon, which shows a Notice when clicked.
-- Adds a command "Open modal (simple)" which opens a Modal.
-- Adds a plugin setting tab to the settings page.
-- Registers a global click event and output 'click' to the console.
-- Registers a global interval which logs 'setInterval' to the console.
+### One-way task sync (TickTick → Obsidian)
 
-## First time developing plugins?
+Each active task in your mapped TickTick lists becomes a Markdown file in the folder you choose. The plugin creates the file if it doesn't exist, and on subsequent syncs only refreshes the frontmatter — **your note body is never overwritten**.
 
-Quick starting guide for new plugin devs:
+### Rich YAML frontmatter
 
-- Check if [someone already developed a plugin for what you want](https://obsidian.md/plugins)! There might be an existing plugin similar enough that you can partner up with.
-- Make a copy of this repo as a template with the "Use this template" button (login to GitHub if you don't see it).
-- Clone your repo to a local development folder. For convenience, you can place this folder in your `.obsidian/plugins/your-plugin-name` folder.
-- Install NodeJS, then run `npm i` in the command line under your repo folder.
-- Run `npm run dev` to compile your plugin from `main.ts` to `main.js`.
-- Make changes to `main.ts` (or create new `.ts` files). Those changes should be automatically compiled into `main.js`.
-- Reload Obsidian to load the new version of your plugin.
-- Enable plugin in settings window.
-- For updates to the Obsidian API run `npm update` in the command line under your repo folder.
+Every synced note includes structured metadata you can query with Dataview or any other plugin:
 
-## Releasing new releases
-
-- Update your `manifest.json` with your new version number, such as `1.0.1`, and the minimum Obsidian version required for your latest release.
-- Update your `versions.json` file with `"new-plugin-version": "minimum-obsidian-version"` so older versions of Obsidian can download an older version of your plugin that's compatible.
-- Create new GitHub release using your new version number as the "Tag version". Use the exact version number, don't include a prefix `v`. See here for an example: https://github.com/obsidianmd/obsidian-sample-plugin/releases
-- Upload the files `manifest.json`, `main.js`, `styles.css` as binary attachments. Note: The manifest.json file must be in two places, first the root path of your repository and also in the release.
-- Publish the release.
-
-> You can simplify the version bump process by running `npm version patch`, `npm version minor` or `npm version major` after updating `minAppVersion` manually in `manifest.json`.
-> The command will bump version in `manifest.json` and `package.json`, and add the entry for the new version to `versions.json`
-
-## Adding your plugin to the community plugin list
-
-- Check the [plugin guidelines](https://docs.obsidian.md/Plugins/Releasing/Plugin+guidelines).
-- Publish an initial version.
-- Make sure you have a `README.md` file in the root of your repo.
-- Make a pull request at https://github.com/obsidianmd/obsidian-releases to add your plugin.
-
-## How to use
-
-- Clone this repo.
-- Make sure your NodeJS is at least v16 (`node --version`).
-- `npm i` or `yarn` to install dependencies.
-- `npm run dev` to start compilation in watch mode.
-
-## Manually installing the plugin
-
-- Copy over `main.js`, `styles.css`, `manifest.json` to your vault `VaultFolder/.obsidian/plugins/your-plugin-id/`.
-
-## Improve code quality with eslint
-- [ESLint](https://eslint.org/) is a tool that analyzes your code to quickly find problems. You can run ESLint against your plugin to find common bugs and ways to improve your code. 
-- This project already has eslint preconfigured, you can invoke a check by running`npm run lint`
-- Together with a custom eslint [plugin](https://github.com/obsidianmd/eslint-plugin) for Obsidan specific code guidelines.
-- A GitHub action is preconfigured to automatically lint every commit on all branches.
-
-## Funding URL
-
-You can include funding URLs where people who use your plugin can financially support it.
-
-The simple way is to set the `fundingUrl` field to your link in your `manifest.json` file:
-
-```json
-{
-    "fundingUrl": "https://buymeacoffee.com"
-}
+```yaml
+---
+ticktick_id: 69b788cfebcdf5000000030f
+ticktick_url: https://ticktick.com/webapp/#p/69b7811aebcdf50000000071/tasks/69b788cfebcdf5000000030f
+priority: High
+start_date: 2026-03-10 09:00
+due_date: 2026-03-15 17:00
+tags:
+  - work
+  - urgent
+context: work
+---
 ```
 
-If you have multiple URLs, you can also do:
+| Field | Source |
+|---|---|
+| `ticktick_id` | Unique TickTick task ID |
+| `ticktick_url` | Direct link to the task in TickTick's web app |
+| `priority` | `High`, `Medium`, `Low`, or `None` (mapped from TickTick's numeric values) |
+| `start_date` / `due_date` | Formatted with the task's timezone as `YYYY-MM-DD HH:mm` |
+| `completed_time` | Added when a task is marked complete |
+| `tags` | Merged from TickTick task tags + the per-mapping tag you configure |
+| `context` | Custom context label set per list mapping (e.g. `work`, `personal`) |
 
-```json
-{
-    "fundingUrl": {
-        "Buy Me a Coffee": "https://buymeacoffee.com",
-        "GitHub Sponsor": "https://github.com/sponsors",
-        "Patreon": "https://www.patreon.com/"
-    }
-}
+### Obsidian link in TickTick
+
+On first sync, the plugin prepends an `obsidian://` deep link to the task's content in TickTick so you can jump straight from TickTick to the corresponding note. Existing task content is preserved — the link is added only once.
+
+### Completed task archiving
+
+When a task is marked complete in TickTick, the plugin moves its note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your active workspace clean while retaining a dated archive.
+
+### Flexible list mappings
+
+Map any number of TickTick lists to Obsidian folders. Each mapping supports:
+
+- **TickTick list** — selected from a dropdown after logging in.
+- **Obsidian folder** — vault-relative path where task notes are created (auto-created if missing).
+- **Tag** — an extra tag appended to the note's frontmatter `tags` array.
+- **Context** — a freeform label written as the `context` frontmatter field.
+
+### Desktop browser login
+
+Authentication is handled by opening a TickTick sign-in window directly inside Obsidian's desktop app. No API keys or passwords are stored — only the session cookie.
+
+## Getting started
+
+### Installation
+
+1. Clone or download this repository into your vault's plugin folder:
+   ```
+   <Vault>/.obsidian/plugins/sync-ticktick/
+   ```
+2. Install dependencies and build:
+   ```bash
+   npm install
+   npm run build
+   ```
+3. Reload Obsidian, then enable **Sync TickTick** in **Settings → Community plugins**.
+
+### Configuration
+
+1. Open **Settings → Sync TickTick**.
+2. Click **Log In & Fetch Lists** — a browser window opens for you to sign in to TickTick.
+3. Set your **Obsidian vault name** (used to build `obsidian://` links written back to TickTick).
+4. Add one or more **list mappings**:
+   - Select a TickTick list from the dropdown.
+   - Enter the Obsidian folder path (e.g. `tasks/work`).
+   - Optionally set a tag and/or context.
+5. Click the **checkmark ribbon icon** or run the **Sync TickTick Tasks** command from the command palette to sync.
+
+## How syncing works
+
+| Scenario | What happens |
+|---|---|
+| **New task** | A Markdown file is created with frontmatter + task content. An `obsidian://` link is written back to the TickTick task. |
+| **Existing task** | Only the YAML frontmatter is refreshed. Your note body is untouched. |
+| **Completed task** | The note is moved to `<folder>/done/YYYY/MM/`. If a copy already exists there, the active file is trashed to avoid duplicates. |
+| **TickTick task content** | Never overwritten after the initial `obsidian://` link is added. |
+
+## Development
+
+```bash
+# Watch mode (rebuilds on save)
+npm run dev
+
+# Production build
+npm run build
 ```
 
-## API Documentation
+## Requirements
 
-See https://docs.obsidian.md
+- Obsidian **v0.15.0+**
+- Desktop only (uses Electron's `BrowserWindow` for authentication)

@@ -6,6 +6,8 @@ export interface TickTickListMapping {
 	listId: string;
 	listName: string;
 	folder: string;
+	tag?: string;
+	context?: string;
 }
 
 export interface TickTickSyncSettings {
@@ -143,6 +145,20 @@ export class TickTickSettingTab extends PluginSettingTab {
 					.setValue(mapping.folder)
 					.onChange(async (val) => {
 						mapping.folder = val;
+						await this.plugin.saveSettings();
+					}))
+				.addText(text => text
+					.setPlaceholder('Tag (added to frontmatter tags)')
+					.setValue(mapping.tag || '')
+					.onChange(async (val) => {
+						mapping.tag = val.trim() || undefined;
+						await this.plugin.saveSettings();
+					}))
+				.addText(text => text
+					.setPlaceholder('Context (e.g. work, personal)')
+					.setValue(mapping.context || '')
+					.onChange(async (val) => {
+						mapping.context = val.trim() || undefined;
 						await this.plugin.saveSettings();
 					}))
 				.addExtraButton(btn => btn

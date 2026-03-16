@@ -1,6 +1,7 @@
 import { App, Notice, TFile, TFolder, normalizePath } from 'obsidian';
 import { TickTickAPI, TickTickTask } from './api';
 import type TickTickSyncPlugin from './main';
+import type { TickTickListMapping } from './settings';
 
 export class TickTickSync {
 	private api: TickTickAPI;
@@ -67,7 +68,7 @@ export class TickTickSync {
 				const tasks = allTasks.filter(t => t.status !== 2);
 				console.log(`[TickTick Sync] Project "${mapping.listName || projectId}": ${tasks.length} active tasks (${allTasks.length - tasks.length} completed filtered out)`);
 				for (const task of tasks) {
-					await this.createOrUpdateTaskFile(task, folderPath, vaultName);
+					await this.createOrUpdateTaskFile(task, folderPath, vaultName, mapping);
 				}
 
 				// Sync completed tasks
@@ -107,16 +108,73 @@ export class TickTickSync {
 		return name.replace(/[\\/:"*?<>|]/g, '_').trim();
 	}
 
-	private generateFrontmatter(task: TickTickTask): string {
+	/**
+	 * Maps TickTick numeric priority to a human-readable label.
+	 * TickTick uses: 0 = None, 1 = Low, 3 = Medium, 5 = High
+	 */
+	private priorityToLabel(priority: number): string {
+		switch (priority) {
+			case 5: return 'High';
+			case 3: return 'Medium';
+			case 1: return 'Low';
+			default: return 'None';
+		}
+	}
+
+	/**
+	 * Formats an ISO / TickTick date string into a timezone-aware
+	 * `YYYY-MM-DD HH:mm` string.  Falls back to the local timezone
+	 * when the task carries no `timeZone` info.
+	 */
+	private formatDateWithTimezone(dateStr: string, timeZone?: string): string {
+		try {
+			const date = new Date(dateStr);
+			if (isNaN(date.getTime())) return dateStr; // unparseable → pass through
+
+			const opts: Intl.DateTimeFormatOptions = {
+				year: 'numeric',
+				month: '2-digit',
+				day: '2-digit',
+				hour: '2-digit',
+				minute: '2-digit',
+				hour12: false,
+				...(timeZone ? { timeZone } : {}),
+			};
+
+			// Build parts map for reliable ordering
+			const parts = new Intl.DateTimeFormat('en-GB', opts).formatToParts(date);
+			const p: Record<string, string> = {};
+			for (const { type, value } of parts) p[type] = value;
+
+			return `${p.year}-${p.month}-${p.day} ${p.hour}:${p.minute}`;
+		} catch {
+			return dateStr; // safety fallback
+		}
+	}
+
+	private generateFrontmatter(task: TickTickTask, mapping?: TickTickListMapping): string {
 		let fm = '---\n';
 		fm += `ticktick_id: ${task.id}\n`;
-		fm += `priority: ${task.priority || 0}\n`;
-		if (task.startDate) fm += `start_date: ${task.startDate}\n`;
-		if (task.dueDate) fm += `due_date: ${task.dueDate}\n`;
-		if (task.completedTime) fm += `completed_time: ${task.completedTime}\n`;
-		if (task.tags && task.tags.length > 0) {
-			fm += `tags:\n${task.tags.map(t => `  - ${t}`).join('\n')}\n`;
+		fm += `ticktick_url: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
+		fm += `priority: ${this.priorityToLabel(task.priority || 0)}\n`;
+
+		if (task.startDate) fm += `start_date: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
+		if (task.dueDate) fm += `due_date: ${this.formatDateWithTimezone(task.dueDate, task.timeZone)}\n`;
+		if (task.completedTime) fm += `completed_time: ${this.formatDateWithTimezone(task.completedTime, task.timeZone)}\n`;
+
+		// Merge TickTick tags with the per-list tag from settings
+		const allTags: string[] = [...(task.tags || [])];
+		if (mapping?.tag && !allTags.includes(mapping.tag)) {
+			allTags.push(mapping.tag);
 		}
+		if (allTags.length > 0) {
+			fm += `tags:\n${allTags.map(t => `  - ${t}`).join('\n')}\n`;
+		}
+
+		if (mapping?.context) {
+			fm += `context: ${mapping.context}\n`;
+		}
+
 		fm += '---\n\n';
 		return fm;
 	}
@@ -125,7 +183,7 @@ export class TickTickSync {
 	 * Replaces the YAML frontmatter of an existing file with fresh data from TickTick,
 	 * preserving everything below the closing `---`.
 	 */
-	private async refreshFrontmatter(file: TFile, task: TickTickTask): Promise<void> {
+	private async refreshFrontmatter(file: TFile, task: TickTickTask, mapping?: TickTickListMapping): Promise<void> {
 		const existing = await this.app.vault.read(file);
 		let body = '';
 
@@ -144,7 +202,7 @@ export class TickTickSync {
 			body = existing;
 		}
 
-		const newFm = this.generateFrontmatter(task);
+		const newFm = this.generateFrontmatter(task, mapping);
 		const updated = newFm + body.trimStart();
 
 		if (updated !== existing) {
@@ -155,18 +213,18 @@ export class TickTickSync {
 		}
 	}
 
-	private async createOrUpdateTaskFile(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
+	private async createOrUpdateTaskFile(task: TickTickTask, folderPath: string, vaultName?: string, mapping?: TickTickListMapping): Promise<void> {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const filePath = normalizePath(`${folderPath}/${fileName}`);
 
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!file) {
 			console.log(`[TickTick Sync] Creating file: ${filePath}`);
-			const content = this.generateFrontmatter(task) + (task.content || '');
+			const content = this.generateFrontmatter(task, mapping) + (task.content || '');
 			await this.app.vault.create(filePath, content);
 		} else if (file instanceof TFile) {
 			// Update the frontmatter in the existing file with the latest values from TickTick
-			await this.refreshFrontmatter(file, task);
+			await this.refreshFrontmatter(file, task, mapping);
 		}
 
 		// Write Obsidian URI back to the TickTick task (for new AND existing files)
