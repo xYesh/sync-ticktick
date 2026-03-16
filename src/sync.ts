@@ -9,9 +9,15 @@ export class TickTickSync {
 		this.api = new TickTickAPI();
 	}
 
+	/** Builds the obsidian:// URI for the given folder + file name */
+	private buildObsidianUri(vaultName: string, filePath: string): string {
+		// filePath here is the vault-relative path without .md extension
+		return `obsidian://open?vault=${encodeURIComponent(vaultName)}&file=${encodeURIComponent(filePath)}`;
+	}
+
 	public async sync(): Promise<void> {
-		const { cookie, listMappings } = this.plugin.settings;
-		
+		const { cookie, listMappings, vaultName } = this.plugin.settings;
+
 		if (!cookie) {
 			new Notice('TickTick Sync: Not logged in. Please log in via settings.');
 			return;
@@ -28,16 +34,16 @@ export class TickTickSync {
 
 			new Notice('TickTick Sync: Syncing tasks...');
 			const projects = await this.api.getProjects();
-			
+
 			// Parse mappings: "TickTick Name -> Obsidian Folder"
 			for (const mapping of listMappings) {
 				// Fallback to name match if we don't have listId but have listName
-				let project = mapping.listId 
+				let project = mapping.listId
 					? projects.find(p => p.id === mapping.listId)
 					: projects.find(p => p.name.toLowerCase() === (mapping.listName || '').toLowerCase());
-				
+
 				let projectId = '';
-				
+
 				if (!project && (mapping.listName || '').toLowerCase() === 'inbox') {
 					projectId = 'inbox'; // Inbox is often implicitly 'inbox' depending on API
 				} else if (project) {
@@ -55,7 +61,7 @@ export class TickTickSync {
 				// Sync active tasks
 				const tasks = await this.api.getTasksByProjectId(projectId);
 				for (const task of tasks) {
-					await this.createTaskFileIfNotExists(task, folderPath);
+					await this.createTaskFileIfNotExists(task, folderPath, vaultName);
 				}
 
 				// Sync completed tasks
@@ -109,22 +115,35 @@ export class TickTickSync {
 		return fm;
 	}
 
-	private async createTaskFileIfNotExists(task: TickTickTask, folderPath: string): Promise<void> {
+	private async createTaskFileIfNotExists(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const filePath = normalizePath(`${folderPath}/${fileName}`);
-		
+
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!file) {
 			// File doesn't exist, create it
 			const content = this.generateFrontmatter(task) + (task.content || '');
 			await this.app.vault.create(filePath, content);
+
+			// Write Obsidian URI back to the TickTick task content
+			if (vaultName) {
+				// Check the task doesn't already have an obsidian:// link
+				const alreadyLinked = (task.content || '').includes('obsidian://');
+				if (!alreadyLinked) {
+					// vault-relative path without extension (Obsidian open URI uses path without .md)
+					const vaultRelativePath = filePath.endsWith('.md') ? filePath.slice(0, -3) : filePath;
+					const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
+					const newContent = `${obsidianUri}\n\n${task.content || ''}`.trim();
+					await this.api.updateTaskContent(task, newContent);
+				}
+			}
 		}
 	}
 
 	private async moveTaskToDone(task: TickTickTask, folderPath: string): Promise<void> {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const activeFilePath = normalizePath(`${folderPath}/${fileName}`);
-		
+
 		const file = this.app.vault.getAbstractFileByPath(activeFilePath);
 		if (file && file instanceof TFile) {
 			// Update frontmatter to include completed_time before moving
@@ -143,11 +162,11 @@ export class TickTickSync {
 				const date = new Date(dateStr);
 				year = date.getFullYear().toString();
 				month = (date.getMonth() + 1).toString().padStart(2, '0');
-			} catch(e) {
+			} catch (e) {
 				year = new Date().getFullYear().toString();
 				month = (new Date().getMonth() + 1).toString().padStart(2, '0');
 			}
-			
+
 			const doneFolderBasePath = normalizePath(`${folderPath}/done`);
 			const doneFolderYearPath = normalizePath(`${doneFolderBasePath}/${year}`);
 			const doneFolderMonthPath = normalizePath(`${doneFolderYearPath}/${month}`);
@@ -155,7 +174,7 @@ export class TickTickSync {
 			await this.ensureFolderExists(doneFolderMonthPath);
 
 			const newFilePath = normalizePath(`${doneFolderMonthPath}/${fileName}`);
-			
+
 			const existingDoneFile = this.app.vault.getAbstractFileByPath(newFilePath);
 			if (!existingDoneFile) {
 				await this.app.fileManager.renameFile(file, newFilePath);

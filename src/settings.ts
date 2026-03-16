@@ -10,15 +10,17 @@ export interface TickTickListMapping {
 
 export interface TickTickSyncSettings {
 	cookie: string;
+	vaultName: string;
 	listMappings: TickTickListMapping[];
 	// Deprecated, keeping temporarily for migration
-	listMapping?: string; 
+	listMapping?: string;
 	username?: string; // Deprecated
 	password?: string; // Deprecated
 }
 
 export const DEFAULT_SETTINGS: TickTickSyncSettings = {
 	cookie: '',
+	vaultName: '',
 	listMappings: [],
 };
 
@@ -44,14 +46,14 @@ export class TickTickSettingTab extends PluginSettingTab {
 		containerEl.createEl('h2', { text: 'TickTick Sync Settings' });
 
 		if (this.plugin.settings.cookie) {
-			containerEl.createEl('div', { 
-				text: '✅ Logged in to TickTick', 
+			containerEl.createEl('div', {
+				text: '✅ Logged in to TickTick',
 				cls: 'setting-item-description',
 				attr: { style: 'color: var(--text-success); margin-bottom: 18px;' }
 			});
 		} else {
-			containerEl.createEl('div', { 
-				text: '❌ Not logged in', 
+			containerEl.createEl('div', {
+				text: '❌ Not logged in',
 				cls: 'setting-item-description',
 				attr: { style: 'color: var(--text-error); margin-bottom: 18px;' }
 			});
@@ -71,19 +73,19 @@ export class TickTickSettingTab extends PluginSettingTab {
 							button.setButtonText(this.plugin.settings.cookie ? 'Refresh Login' : 'Log In & Fetch Lists');
 							return;
 						}
-						
+
 						// Save the cookie
 						this.plugin.settings.cookie = cookie.name + '=' + cookie.value;
 						// Clear out old credentials if they exist
 						delete this.plugin.settings.username;
 						delete this.plugin.settings.password;
 						await this.plugin.saveSettings();
-						
+
 						// Test authentication by fetching projects
 						button.setButtonText('Fetching lists...');
 						this.api.setCookie(this.plugin.settings.cookie);
 						this.projects = await this.api.getProjects();
-						
+
 						new Notice(`Fetched ${this.projects.length} lists successfully.`);
 						this.renderSettings(); // Re-render to update the mapping dropdowns and login status
 					} catch (e) {
@@ -95,6 +97,17 @@ export class TickTickSettingTab extends PluginSettingTab {
 					}
 				}));
 
+		new Setting(containerEl)
+			.setName('Obsidian vault name')
+			.setDesc('The exact name of your Obsidian vault. Used to build the obsidian:// link written back to each TickTick task.')
+			.addText(text => text
+				.setPlaceholder('e.g. MyVault')
+				.setValue(this.plugin.settings.vaultName)
+				.onChange(async (value) => {
+					this.plugin.settings.vaultName = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
 		containerEl.createEl('h3', { text: 'List Mappings' });
 
 		this.plugin.settings.listMappings.forEach((mapping, index) => {
@@ -103,7 +116,7 @@ export class TickTickSettingTab extends PluginSettingTab {
 				.addDropdown(dropdown => {
 					// Add default option if empty listId
 					dropdown.addOption('', 'Select a TickTick list');
-					
+
 					// Add fetched projects to dropdown options
 					this.projects.forEach(project => {
 						dropdown.addOption(project.id, project.name);

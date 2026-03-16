@@ -46,7 +46,7 @@ export class TickTickAPI {
 				finished = true;
 				try {
 					tryCleanup();
-				} catch {}
+				} catch { }
 				resolve(value);
 			};
 
@@ -55,7 +55,7 @@ export class TickTickAPI {
 			try {
 				electron = (window as any).require?.('electron');
 				BrowserWindow = electron?.remote?.BrowserWindow || electron?.BrowserWindow;
-			} catch {}
+			} catch { }
 
 			if (!BrowserWindow) {
 				new Notice('Desktop login is not available in this environment. Are you on mobile?', 5000);
@@ -72,7 +72,7 @@ export class TickTickAPI {
 						clearInterval(pollId);
 						pollId = null;
 					}
-				} catch {}
+				} catch { }
 				try {
 					if (win) {
 						win.removeAllListeners?.('closed');
@@ -81,7 +81,7 @@ export class TickTickAPI {
 						win.webContents?.removeAllListeners?.('did-navigate');
 						win.webContents?.removeAllListeners?.('destroyed');
 					}
-				} catch {}
+				} catch { }
 			};
 
 			const tryGetCookies = async (): Promise<any[] | null> => {
@@ -150,7 +150,7 @@ export class TickTickAPI {
 								document.body.appendChild(bar);
 							})();
 						`);
-					} catch {}
+					} catch { }
 				});
 
 				pollId = setInterval(async () => {
@@ -159,7 +159,7 @@ export class TickTickAPI {
 						const flags = await win.webContents.executeJavaScript(`({ f: !!window.__TTS_FINISH, c: !!window.__TTS_CANCEL })`);
 						if (flags?.c) {
 							tryCleanup();
-							try { win.close?.(); } catch {}
+							try { win.close?.(); } catch { }
 							settle(null);
 							return;
 						}
@@ -169,16 +169,16 @@ export class TickTickAPI {
 							if (!found) {
 								new Notice('Could not detect session cookie (t). Are you signed in?', 5000);
 								tryCleanup();
-								try { win.close?.(); } catch {}
+								try { win.close?.(); } catch { }
 								settle(null);
 								return;
 							}
 							tryCleanup();
-							try { win.close?.(); } catch {}
+							try { win.close?.(); } catch { }
 							settle({ name: found.name, value: found.value });
 							return;
 						}
-					} catch {}
+					} catch { }
 				}, 400);
 
 				win.webContents.on('did-navigate', async (_e: any, url: string) => {
@@ -192,11 +192,11 @@ export class TickTickAPI {
 							const found = cookies ? cookies.find(c => c.name === 't') : null;
 							if (found) {
 								tryCleanup();
-								try { win.close?.(); } catch {}
+								try { win.close?.(); } catch { }
 								settle({ name: found.name, value: found.value });
 							}
 						}
-					} catch {}
+					} catch { }
 				});
 
 				win.on('close', () => { if (!finished) settle(null); });
@@ -238,6 +238,52 @@ export class TickTickAPI {
 		}
 	}
 
+	/**
+	 * Updates the content field of an existing TickTick task.
+	 * Uses the batch/task endpoint (same as TickTickSync's updateTask).
+	 */
+	public async updateTaskContent(task: TickTickTask, newContent: string): Promise<boolean> {
+		if (!this.cookie) throw new Error('Not authenticated');
+		try {
+			const payload = {
+				add: [],
+				addAttachments: [],
+				delete: [],
+				deleteAttachments: [],
+				updateAttachments: [],
+				update: [{
+					id: task.id,
+					projectId: task.projectId,
+					title: task.title,
+					content: newContent,
+					status: task.status,
+					priority: task.priority,
+					modifiedTime: new Date().toISOString().replace('Z', '+0000'),
+				}]
+			};
+
+			const response = await requestUrl({
+				url: 'https://api.ticktick.com/api/v2/batch/task',
+				method: 'POST',
+				headers: {
+					'Cookie': this.cookie,
+					'Content-Type': 'application/json',
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/'
+				},
+				body: JSON.stringify(payload),
+				throw: false,
+			});
+
+			return response.status === 200;
+		} catch (error) {
+			console.error(`Failed to update task content for ${task.id}`, error);
+			return false;
+		}
+	}
+
 	public async getTasksByProjectId(projectId: string): Promise<TickTickTask[]> {
 		if (!this.cookie) throw new Error('Not authenticated');
 
@@ -265,7 +311,7 @@ export class TickTickAPI {
 			throw error;
 		}
 	}
-	
+
 	public async getCompletedTasksByProjectId(projectId: string): Promise<TickTickTask[]> {
 		if (!this.cookie) throw new Error('Not authenticated');
 
