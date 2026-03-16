@@ -272,12 +272,14 @@ export class TickTickSync {
 
 		const file = this.app.vault.getAbstractFileByPath(activeFilePath);
 		if (file && file instanceof TFile) {
-			// Update frontmatter to include completed_time before moving
-			let content = await this.app.vault.read(file);
-			if (!content.includes('completed_time:')) {
-				content = content.replace('---\n', `---\ncompleted_time: ${task.completedTime || new Date().toISOString()}\n`);
-				await this.app.vault.modify(file, content);
-			}
+			// Update frontmatter to include completed_time and status to done before moving
+			await this.app.fileManager.processFrontMatter(file, (fm: any) => {
+				fm['status'] = 'done';
+				if (!fm['completed_time']) {
+					const timeToUse = task.completedTime || new Date().toISOString();
+					fm['completed_time'] = this.formatDateWithTimezone(timeToUse, task.timeZone);
+				}
+			});
 
 			// Found the active file, move it to done
 			const dateStr = task.completedTime || new Date().toISOString();
