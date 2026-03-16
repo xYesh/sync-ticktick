@@ -252,12 +252,8 @@ export class TickTickAPI {
 				deleteAttachments: [],
 				updateAttachments: [],
 				update: [{
-					id: task.id,
-					projectId: task.projectId,
-					title: task.title,
+					...task,
 					content: newContent,
-					status: task.status,
-					priority: task.priority,
 					modifiedTime: new Date().toISOString().replace('Z', '+0000'),
 				}]
 			};
