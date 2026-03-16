@@ -193,11 +193,11 @@ export class TickTickSync {
 		await this.app.fileManager.processFrontMatter(file, (fm: any) => {
 			fm['ticktick_id'] = task.id;
 			fm['ticktick_url'] = `https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}`;
-			
+
 			if (mapping?.listName) {
 				fm['ticktick_list'] = mapping.listName;
 			}
-			
+
 			fm['status'] = task.status === 2 ? 'done' : 'in-progress';
 			fm['priority'] = this.priorityToLabel(task.priority || 0);
 
@@ -209,7 +209,7 @@ export class TickTickSync {
 			const globalTag = this.plugin.settings.globalTag;
 			const existingTags: string[] = Array.isArray(fm['tags']) ? fm['tags'] : [];
 			const taskTags: string[] = task.tags || [];
-			
+
 			const allTags = new Set([...existingTags, ...taskTags]);
 			if (globalTag) allTags.add(globalTag);
 			if (mapping?.tag) allTags.add(mapping.tag);
@@ -309,11 +309,11 @@ export class TickTickSync {
 					const vaultRelativePath = newFilePath.endsWith('.md') ? newFilePath.slice(0, -3) : newFilePath;
 					const newObsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
 					const newObsidianLink = `[📝 Open note in Obsidian](${newObsidianUri})`;
-					
+
 					let contentToUpdate = task.content || '';
 					const mdLinkRegex = /\[📝 Open note in Obsidian\]\(obsidian:\/\/.*?\)/g;
 					const rawLinkRegex = /obsidian:\/\/open\?vault=[^&\s]+&file=[^\s)]+/g;
-					
+
 					if (contentToUpdate.match(mdLinkRegex)) {
 						contentToUpdate = contentToUpdate.replace(mdLinkRegex, newObsidianLink);
 					} else if (contentToUpdate.match(rawLinkRegex)) {
