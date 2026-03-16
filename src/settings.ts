@@ -13,6 +13,7 @@ export interface TickTickListMapping {
 export interface TickTickSyncSettings {
 	cookie: string;
 	vaultName: string;
+	globalTag: string;
 	listMappings: TickTickListMapping[];
 	// Deprecated, keeping temporarily for migration
 	listMapping?: string;
@@ -23,6 +24,7 @@ export interface TickTickSyncSettings {
 export const DEFAULT_SETTINGS: TickTickSyncSettings = {
 	cookie: '',
 	vaultName: '',
+	globalTag: '',
 	listMappings: [],
 };
 
@@ -107,6 +109,17 @@ export class TickTickSettingTab extends PluginSettingTab {
 				.setValue(this.plugin.settings.vaultName)
 				.onChange(async (value) => {
 					this.plugin.settings.vaultName = value.trim();
+					await this.plugin.saveSettings();
+				}));
+
+		new Setting(containerEl)
+			.setName('Global tag')
+			.setDesc('A tag added to every synced task, regardless of which list it belongs to.')
+			.addText(text => text
+				.setPlaceholder('e.g. ticktick')
+				.setValue(this.plugin.settings.globalTag)
+				.onChange(async (value) => {
+					this.plugin.settings.globalTag = value.trim();
 					await this.plugin.saveSettings();
 				}));
 

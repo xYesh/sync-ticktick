@@ -156,14 +156,19 @@ export class TickTickSync {
 		let fm = '---\n';
 		fm += `ticktick_id: ${task.id}\n`;
 		fm += `ticktick_url: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
+		if (mapping?.listName) fm += `ticktick_list: ${mapping.listName}\n`;
 		fm += `priority: ${this.priorityToLabel(task.priority || 0)}\n`;
 
 		if (task.startDate) fm += `start_date: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
 		if (task.dueDate) fm += `due_date: ${this.formatDateWithTimezone(task.dueDate, task.timeZone)}\n`;
 		if (task.completedTime) fm += `completed_time: ${this.formatDateWithTimezone(task.completedTime, task.timeZone)}\n`;
 
-		// Merge TickTick tags with the per-list tag from settings
+		// Merge TickTick tags with the global tag and the per-list tag from settings
+		const globalTag = this.plugin.settings.globalTag;
 		const allTags: string[] = [...(task.tags || [])];
+		if (globalTag && !allTags.includes(globalTag)) {
+			allTags.push(globalTag);
+		}
 		if (mapping?.tag && !allTags.includes(mapping.tag)) {
 			allTags.push(mapping.tag);
 		}
