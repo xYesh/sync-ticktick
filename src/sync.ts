@@ -32,8 +32,12 @@ export class TickTickSync {
 			// Apply the stored cookie directly to the API
 			this.api.setCookie(cookie);
 
+			console.log('[TickTick Sync] Starting sync. Vault name:', vaultName || '(not set)');
+			console.log('[TickTick Sync] Active mappings:', listMappings.length);
+
 			new Notice('TickTick Sync: Syncing tasks...');
 			const projects = await this.api.getProjects();
+			console.log('[TickTick Sync] Fetched projects:', projects.map(p => `${p.name} (${p.id})`));
 
 			// Parse mappings: "TickTick Name -> Obsidian Folder"
 			for (const mapping of listMappings) {
@@ -58,10 +62,12 @@ export class TickTickSync {
 				const folderPath = normalizePath(mapping.folder);
 				await this.ensureFolderExists(folderPath);
 
-				// Sync active tasks
-				const tasks = await this.api.getTasksByProjectId(projectId);
+				// Sync active tasks — filter out completed ones (status 2) the API may include
+				const allTasks = await this.api.getTasksByProjectId(projectId);
+				const tasks = allTasks.filter(t => t.status !== 2);
+				console.log(`[TickTick Sync] Project "${mapping.listName || projectId}": ${tasks.length} active tasks (${allTasks.length - tasks.length} completed filtered out)`);
 				for (const task of tasks) {
-					await this.createTaskFileIfNotExists(task, folderPath, vaultName);
+					await this.createOrUpdateTaskFile(task, folderPath, vaultName);
 				}
 
 				// Sync completed tasks
@@ -115,28 +121,77 @@ export class TickTickSync {
 		return fm;
 	}
 
-	private async createTaskFileIfNotExists(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
+	/**
+	 * Replaces the YAML frontmatter of an existing file with fresh data from TickTick,
+	 * preserving everything below the closing `---`.
+	 */
+	private async refreshFrontmatter(file: TFile, task: TickTickTask): Promise<void> {
+		const existing = await this.app.vault.read(file);
+		let body = '';
+
+		if (existing.startsWith('---')) {
+			// Find the closing ---
+			const closeIdx = existing.indexOf('\n---', 3);
+			if (closeIdx !== -1) {
+				// Everything after the closing --- line + newline is the body
+				body = existing.slice(closeIdx + 4); // skip '\n---'
+			} else {
+				// Malformed frontmatter — treat entire content as body
+				body = existing;
+			}
+		} else {
+			// No frontmatter yet — whole file is body
+			body = existing;
+		}
+
+		const newFm = this.generateFrontmatter(task);
+		const updated = newFm + body.trimStart();
+
+		if (updated !== existing) {
+			console.log(`[TickTick Sync] Refreshing frontmatter: ${file.path}`);
+			await this.app.vault.modify(file, updated);
+		} else {
+			console.log(`[TickTick Sync] Frontmatter up to date: ${file.path}`);
+		}
+	}
+
+	private async createOrUpdateTaskFile(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const filePath = normalizePath(`${folderPath}/${fileName}`);
 
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!file) {
-			// File doesn't exist, create it
+			console.log(`[TickTick Sync] Creating file: ${filePath}`);
 			const content = this.generateFrontmatter(task) + (task.content || '');
 			await this.app.vault.create(filePath, content);
+		} else if (file instanceof TFile) {
+			// Update the frontmatter in the existing file with the latest values from TickTick
+			await this.refreshFrontmatter(file, task);
+		}
 
-			// Write Obsidian URI back to the TickTick task content
-			if (vaultName) {
-				// Check the task doesn't already have an obsidian:// link
-				const alreadyLinked = (task.content || '').includes('obsidian://');
-				if (!alreadyLinked) {
-					// vault-relative path without extension (Obsidian open URI uses path without .md)
-					const vaultRelativePath = filePath.endsWith('.md') ? filePath.slice(0, -3) : filePath;
-					const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
-					const newContent = `${obsidianUri}\n\n${task.content || ''}`.trim();
-					await this.api.updateTaskContent(task, newContent);
-				}
-			}
+		// Write Obsidian URI back to the TickTick task (for new AND existing files)
+		if (!vaultName) {
+			console.warn('[TickTick Sync] Vault name not set — skipping URI write-back for task:', task.title);
+			return;
+		}
+
+		const alreadyLinked = (task.content || '').includes('obsidian://');
+		if (alreadyLinked) {
+			console.log(`[TickTick Sync] Task "${task.title}" already has obsidian:// link, skipping.`);
+			return;
+		}
+
+		const vaultRelativePath = filePath.endsWith('.md') ? filePath.slice(0, -3) : filePath;
+		const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
+		console.log(`[TickTick Sync] Writing Obsidian URI to task "${task.title}": ${obsidianUri}`);
+		// Markdown link — TickTick renders [label](url) as a clickable hyperlink
+		const obsidianLink = `[📝 Open note in Obsidian](${obsidianUri})`;
+		const newContent = `${obsidianLink}\n\n${task.content || ''}`.trim();
+		const ok = await this.api.updateTaskContent(task, newContent);
+		if (ok) {
+			console.log(`[TickTick Sync] ✅ Updated task "${task.title}" in TickTick.`);
+		} else {
+			console.error(`[TickTick Sync] ❌ Failed to update task "${task.title}" in TickTick.`);
 		}
 	}
 

@@ -262,6 +262,19 @@ export class TickTickAPI {
 				}]
 			};
 
+			// TickTick write endpoints require x-device header (observed in TickTickSync reference)
+			const xDevice = JSON.stringify({
+				platform: 'web',
+				os: 'Windows 10',
+				device: 'Chrome 122.0',
+				name: '',
+				version: 6070,
+				id: '6670a1b2c3d4e5f67890ab12',
+				channel: 'website',
+				campaign: '',
+				websocket: ''
+			});
+
 			const response = await requestUrl({
 				url: 'https://api.ticktick.com/api/v2/batch/task',
 				method: 'POST',
@@ -271,11 +284,21 @@ export class TickTickAPI {
 					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
 					'Accept': 'application/json, text/plain, */*',
 					'Origin': 'https://ticktick.com',
-					'Referer': 'https://ticktick.com/'
+					'Referer': 'https://ticktick.com/',
+					'x-device': xDevice,
 				},
 				body: JSON.stringify(payload),
 				throw: false,
 			});
+
+			console.log(`[TickTick API] updateTaskContent status: ${response.status}`);
+			if (response.status !== 200) {
+				try {
+					console.error('[TickTick API] Response body:', response.json);
+				} catch {
+					console.error('[TickTick API] Response text:', response.text);
+				}
+			}
 
 			return response.status === 200;
 		} catch (error) {
@@ -283,6 +306,7 @@ export class TickTickAPI {
 			return false;
 		}
 	}
+
 
 	public async getTasksByProjectId(projectId: string): Promise<TickTickTask[]> {
 		if (!this.cookie) throw new Error('Not authenticated');
