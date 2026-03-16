@@ -157,6 +157,7 @@ export class TickTickSync {
 		fm += `ticktick_id: ${task.id}\n`;
 		fm += `ticktick_url: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
 		if (mapping?.listName) fm += `ticktick_list: ${mapping.listName}\n`;
+		fm += `status: "${task.status === 2 ? 'done' : 'in-progress'}"\n`;
 		fm += `priority: ${this.priorityToLabel(task.priority || 0)}\n`;
 
 		if (task.startDate) fm += `start_date: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
@@ -185,37 +186,44 @@ export class TickTickSync {
 	}
 
 	/**
-	 * Replaces the YAML frontmatter of an existing file with fresh data from TickTick,
-	 * preserving everything below the closing `---`.
+	 * Updates the YAML frontmatter of an existing file with fresh data from TickTick,
+	 * preserving any custom fields the user has added.
 	 */
 	private async refreshFrontmatter(file: TFile, task: TickTickTask, mapping?: TickTickListMapping): Promise<void> {
-		const existing = await this.app.vault.read(file);
-		let body = '';
-
-		if (existing.startsWith('---')) {
-			// Find the closing ---
-			const closeIdx = existing.indexOf('\n---', 3);
-			if (closeIdx !== -1) {
-				// Everything after the closing --- line + newline is the body
-				body = existing.slice(closeIdx + 4); // skip '\n---'
-			} else {
-				// Malformed frontmatter — treat entire content as body
-				body = existing;
+		await this.app.fileManager.processFrontMatter(file, (fm: any) => {
+			fm['ticktick_id'] = task.id;
+			fm['ticktick_url'] = `https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}`;
+			
+			if (mapping?.listName) {
+				fm['ticktick_list'] = mapping.listName;
 			}
-		} else {
-			// No frontmatter yet — whole file is body
-			body = existing;
-		}
+			
+			fm['status'] = task.status === 2 ? 'done' : 'in-progress';
+			fm['priority'] = this.priorityToLabel(task.priority || 0);
 
-		const newFm = this.generateFrontmatter(task, mapping);
-		const updated = newFm + body.trimStart();
+			if (task.startDate) fm['start_date'] = this.formatDateWithTimezone(task.startDate, task.timeZone);
+			if (task.dueDate) fm['due_date'] = this.formatDateWithTimezone(task.dueDate, task.timeZone);
+			if (task.completedTime) fm['completed_time'] = this.formatDateWithTimezone(task.completedTime, task.timeZone);
 
-		if (updated !== existing) {
-			console.log(`[TickTick Sync] Refreshing frontmatter: ${file.path}`);
-			await this.app.vault.modify(file, updated);
-		} else {
-			console.log(`[TickTick Sync] Frontmatter up to date: ${file.path}`);
-		}
+			// Safely merge tags
+			const globalTag = this.plugin.settings.globalTag;
+			const existingTags: string[] = Array.isArray(fm['tags']) ? fm['tags'] : [];
+			const taskTags: string[] = task.tags || [];
+			
+			const allTags = new Set([...existingTags, ...taskTags]);
+			if (globalTag) allTags.add(globalTag);
+			if (mapping?.tag) allTags.add(mapping.tag);
+
+			if (allTags.size > 0) {
+				fm['tags'] = Array.from(allTags);
+			}
+
+			if (mapping?.context) {
+				fm['context'] = mapping.context;
+			}
+		});
+
+		console.log(`[TickTick Sync] Refreshed frontmatter: ${file.path}`);
 	}
 
 	private async createOrUpdateTaskFile(task: TickTickTask, folderPath: string, vaultName?: string, mapping?: TickTickListMapping): Promise<void> {
