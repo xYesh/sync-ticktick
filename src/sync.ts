@@ -74,7 +74,7 @@ export class TickTickSync {
 				// Sync completed tasks
 				const completedTasks = await this.api.getCompletedTasksByProjectId(projectId);
 				for (const completedTask of completedTasks) {
-					await this.moveTaskToDone(completedTask, folderPath);
+					await this.moveTaskToDone(completedTask, folderPath, vaultName);
 				}
 			}
 
@@ -266,7 +266,7 @@ export class TickTickSync {
 		}
 	}
 
-	private async moveTaskToDone(task: TickTickTask, folderPath: string): Promise<void> {
+	private async moveTaskToDone(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const activeFilePath = normalizePath(`${folderPath}/${fileName}`);
 
@@ -304,6 +304,31 @@ export class TickTickSync {
 			const existingDoneFile = this.app.vault.getAbstractFileByPath(newFilePath);
 			if (!existingDoneFile) {
 				await this.app.fileManager.renameFile(file, newFilePath);
+
+				if (vaultName) {
+					const vaultRelativePath = newFilePath.endsWith('.md') ? newFilePath.slice(0, -3) : newFilePath;
+					const newObsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
+					const newObsidianLink = `[📝 Open note in Obsidian](${newObsidianUri})`;
+					
+					let contentToUpdate = task.content || '';
+					const mdLinkRegex = /\[📝 Open note in Obsidian\]\(obsidian:\/\/.*?\)/g;
+					const rawLinkRegex = /obsidian:\/\/open\?vault=[^&\s]+&file=[^\s)]+/g;
+					
+					if (contentToUpdate.match(mdLinkRegex)) {
+						contentToUpdate = contentToUpdate.replace(mdLinkRegex, newObsidianLink);
+					} else if (contentToUpdate.match(rawLinkRegex)) {
+						contentToUpdate = contentToUpdate.replace(rawLinkRegex, newObsidianUri);
+					} else {
+						contentToUpdate = `${newObsidianLink}\n\n${contentToUpdate}`.trim();
+					}
+
+					const ok = await this.api.updateTaskContent(task, contentToUpdate);
+					if (ok) {
+						console.log(`[TickTick Sync] ✅ Updated done task "${task.title}" with new Obsidian URI.`);
+					} else {
+						console.error(`[TickTick Sync] ❌ Failed to update done task "${task.title}" in TickTick.`);
+					}
+				}
 			} else {
 				// We'll just delete the active one if it's already in done to prevent dupes hanging around
 				await this.app.vault.trash(file, true);
