@@ -69,6 +69,17 @@ Authentication is handled by opening a TickTick sign-in window directly inside O
 
 ### Installation
 
+#### Using BRAT (Recommended)
+
+1. Install the [BRAT](https://github.com/TfTHacker/obsidian42-brat) plugin from the Community Plugins under Obsidian settings.
+2. Enable BRAT.
+3. Open the command palette and run the command **BRAT: Add a beta plugin for testing**.
+4. Paste the URL of this GitHub repository.
+5. Click **Add Plugin**.
+6. Switch on **Sync TickTick** in **Settings → Community plugins**.
+
+#### Manual Installation
+
 1. Clone or download this repository into your vault's plugin folder:
    ```
    <Vault>/.obsidian/plugins/sync-ticktick/
