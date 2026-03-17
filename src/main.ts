@@ -4,14 +4,14 @@ import { TickTickSync } from './sync';
 
 export default class TickTickSyncPlugin extends Plugin {
 	settings: TickTickSyncSettings;
+	private syncIntervalId: number | null = null;
 
 	async onload() {
 		await this.loadSettings();
 
 		// Add a ribbon icon placeholder
 		this.addRibbonIcon('list-checks', 'TickTick Sync', () => {
-			const sync = new TickTickSync(this.app, this);
-			sync.sync();
+			this.triggerSync();
 		});
 
 		// Add the command pallete trigger
@@ -19,17 +19,45 @@ export default class TickTickSyncPlugin extends Plugin {
 			id: 'sync-ticktick-tasks',
 			name: 'Sync TickTick Tasks',
 			callback: () => {
-				const sync = new TickTickSync(this.app, this);
-				sync.sync();
+				this.triggerSync();
 			}
 		});
 
 		// Add the settings tab
 		this.addSettingTab(new TickTickSettingTab(this.app, this));
+
+		// Setup auto sync
+		this.setupAutoSync();
 	}
 
 	onunload() {
-		// Cleanup if needed
+		this.clearAutoSync();
+	}
+
+	triggerSync() {
+		const sync = new TickTickSync(this.app, this);
+		sync.sync();
+	}
+
+	setupAutoSync() {
+		this.clearAutoSync();
+
+		if (this.settings.autoSync && this.settings.syncInterval >= 1) {
+			const intervalMs = this.settings.syncInterval * 60 * 1000;
+			this.syncIntervalId = window.setInterval(() => {
+				this.triggerSync();
+			}, intervalMs);
+			this.registerInterval(this.syncIntervalId);
+			console.log(`TickTick Sync: Auto-sync configured for every ${this.settings.syncInterval} minutes.`);
+		}
+	}
+
+	clearAutoSync() {
+		if (this.syncIntervalId !== null) {
+			window.clearInterval(this.syncIntervalId);
+			this.syncIntervalId = null;
+			console.log('TickTick Sync: Auto-sync disabled.');
+		}
 	}
 
 	async loadSettings() {

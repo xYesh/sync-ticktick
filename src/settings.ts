@@ -15,6 +15,9 @@ export interface TickTickSyncSettings {
 	vaultName: string;
 	globalTag: string;
 	listMappings: TickTickListMapping[];
+	autoSync: boolean;
+	syncInterval: number;
+
 	// Deprecated, keeping temporarily for migration
 	listMapping?: string;
 	username?: string; // Deprecated
@@ -26,6 +29,8 @@ export const DEFAULT_SETTINGS: TickTickSyncSettings = {
 	vaultName: '',
 	globalTag: '',
 	listMappings: [],
+	autoSync: false,
+	syncInterval: 15,
 };
 
 export class TickTickSettingTab extends PluginSettingTab {
@@ -200,6 +205,34 @@ export class TickTickSettingTab extends PluginSettingTab {
 					});
 					await this.plugin.saveSettings();
 					this.renderSettings();
+				}));
+
+		containerEl.createEl('h3', { text: 'Auto Sync' });
+
+		new Setting(containerEl)
+			.setName('Enable Auto-Sync')
+			.setDesc('Automatically sync tasks in the background.')
+			.addToggle(toggle => toggle
+				.setValue(this.plugin.settings.autoSync)
+				.onChange(async (value) => {
+					this.plugin.settings.autoSync = value;
+					await this.plugin.saveSettings();
+					this.plugin.setupAutoSync();
+				}));
+
+		new Setting(containerEl)
+			.setName('Sync Interval')
+			.setDesc('How often to sync in minutes (minimum 1 minute).')
+			.addText(text => text
+				.setPlaceholder('15')
+				.setValue(String(this.plugin.settings.syncInterval))
+				.onChange(async (value) => {
+					const num = parseInt(value);
+					if (!isNaN(num) && num >= 1) {
+						this.plugin.settings.syncInterval = num;
+						await this.plugin.saveSettings();
+						this.plugin.setupAutoSync();
+					}
 				}));
 	}
 }

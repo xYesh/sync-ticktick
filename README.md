@@ -44,6 +44,10 @@ On first sync, the plugin prepends an `obsidian://` deep link to the task's cont
 
 When a task is marked complete in TickTick, the plugin moves its note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your active workspace clean while retaining a dated archive.
 
+### Automatic background sync
+
+Configure the plugin to automatically sync your tasks every X minutes in the background, ensuring your Obsidian vault is always up-to-date with your TickTick account.
+
 ### Flexible list mappings
 
 Map any number of TickTick lists to Obsidian folders. Each mapping supports:
@@ -81,7 +85,8 @@ Authentication is handled by opening a TickTick sign-in window directly inside O
    - Select a TickTick list from the dropdown.
    - Enter the Obsidian folder path (e.g. `tasks/work`).
    - Optionally set a tag and/or context.
-5. Click the **checkmark ribbon icon** or run the **Sync TickTick Tasks** command from the command palette to sync.
+5. (Optional) Enable **Auto-Sync** and set your preferred sync interval.
+6. Click the **checkmark ribbon icon** or run the **Sync TickTick Tasks** command from the command palette to force a sync.
 
 ## How syncing works
 
