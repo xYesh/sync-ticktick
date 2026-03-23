@@ -13,6 +13,7 @@ export interface TickTickTask {
 	isAllDay?: boolean;
 	tags?: string[];
 	completedTime?: string;
+	modifiedTime?: string;
 }
 
 export interface TickTickProject {

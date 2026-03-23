@@ -154,6 +154,7 @@ export class TickTickSync {
 
 	private generateFrontmatter(task: TickTickTask, mapping?: TickTickListMapping): string {
 		let fm = '---\n';
+		fm += `source: 'TickTick'\n`;
 		fm += `ticktick_id: ${task.id}\n`;
 		fm += `ticktick_url: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
 		if (mapping?.listName) fm += `ticktick_list: ${mapping.listName}\n`;
@@ -183,6 +184,16 @@ export class TickTickSync {
 
 		fm += '---\n\n';
 		return fm;
+	}
+
+	private getFileBody(fileContent: string): string {
+		if (fileContent.startsWith('---')) {
+			const closeIdx = fileContent.indexOf('\n---', 3);
+			if (closeIdx !== -1) {
+				return fileContent.slice(closeIdx + 4).trimStart();
+			}
+		}
+		return fileContent.trimStart();
 	}
 
 	/**
@@ -230,39 +241,71 @@ export class TickTickSync {
 		const fileName = `${this.sanitizeFileName(task.title)}.md`;
 		const filePath = normalizePath(`${folderPath}/${fileName}`);
 
+		let obsidianBody = '';
+		let fileMtime = 0;
+
 		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!file) {
 			console.log(`[TickTick Sync] Creating file: ${filePath}`);
-			const content = this.generateFrontmatter(task, mapping) + (task.content || '');
+			obsidianBody = (task.content || '').trim();
+			const content = this.generateFrontmatter(task, mapping) + obsidianBody;
 			await this.app.vault.create(filePath, content);
+			// New file: acts as if modified just now
+			fileMtime = Date.now();
 		} else if (file instanceof TFile) {
+			fileMtime = file.stat.mtime;
+
 			// Update the frontmatter in the existing file with the latest values from TickTick
 			await this.refreshFrontmatter(file, task, mapping);
+
+			// Read the file structure to get the user's obsidian content body
+			const existing = await this.app.vault.read(file);
+			obsidianBody = this.getFileBody(existing);
 		}
 
-		// Write Obsidian URI back to the TickTick task (for new AND existing files)
+		// Write Obsidian URI & content back to the TickTick task
 		if (!vaultName) {
 			console.warn('[TickTick Sync] Vault name not set — skipping URI write-back for task:', task.title);
 			return;
 		}
 
-		const alreadyLinked = (task.content || '').includes('obsidian://');
-		if (alreadyLinked) {
-			console.log(`[TickTick Sync] Task "${task.title}" already has obsidian:// link, skipping.`);
-			return;
-		}
-
 		const vaultRelativePath = filePath.endsWith('.md') ? filePath.slice(0, -3) : filePath;
 		const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
-		console.log(`[TickTick Sync] Writing Obsidian URI to task "${task.title}": ${obsidianUri}`);
-		// Markdown link — TickTick renders [label](url) as a clickable hyperlink
 		const obsidianLink = `[📝 Open note in Obsidian](${obsidianUri})`;
-		const newContent = `${obsidianLink}\n\n${task.content || ''}`.trim();
-		const ok = await this.api.updateTaskContent(task, newContent);
-		if (ok) {
-			console.log(`[TickTick Sync] ✅ Updated task "${task.title}" in TickTick.`);
+
+		let taskModifiedMs = 0;
+		if (task.modifiedTime) {
+			const parsed = new Date(task.modifiedTime).getTime();
+			if (!isNaN(parsed)) {
+				taskModifiedMs = parsed;
+			}
+		}
+
+		const hasLink = (task.content || '').includes('obsidian://');
+		const needsInitialLink = !hasLink;
+		const isObsidianNewer = fileMtime > taskModifiedMs;
+		const shouldSyncBody = mapping?.syncBody === true;
+
+		if (needsInitialLink || (shouldSyncBody && isObsidianNewer)) {
+			console.log(`[TickTick Sync] Writing Obsidian URI & content to task "${task.title}"`);
+
+			let baseContent = '';
+			if (shouldSyncBody) {
+				baseContent = obsidianBody;
+			} else {
+				baseContent = task.content || '';
+			}
+
+			const contentToSync = `${obsidianLink}\n\n${baseContent}`.trim();
+
+			const ok = await this.api.updateTaskContent(task, contentToSync);
+			if (ok) {
+				console.log(`[TickTick Sync] ✅ Updated task "${task.title}" in TickTick.`);
+			} else {
+				console.error(`[TickTick Sync] ❌ Failed to update task "${task.title}" in TickTick.`);
+			}
 		} else {
-			console.error(`[TickTick Sync] ❌ Failed to update task "${task.title}" in TickTick.`);
+			console.log(`[TickTick Sync] Task "${task.title}" already up to date in TickTick.`);
 		}
 	}
 

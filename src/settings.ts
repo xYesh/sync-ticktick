@@ -8,6 +8,7 @@ export interface TickTickListMapping {
 	folder: string;
 	tag?: string;
 	context?: string;
+	syncBody?: boolean;
 }
 
 export interface TickTickSyncSettings {
@@ -159,26 +160,32 @@ export class TickTickSettingTab extends PluginSettingTab {
 					});
 				})
 				.addText(text => text
-					.setPlaceholder('Obsidian Folder (e.g. ticktick/inbox)')
+					.setPlaceholder('Obsidian Folder')
 					.setValue(mapping.folder)
 					.onChange(async (val) => {
 						mapping.folder = val;
 						await this.plugin.saveSettings();
 					}))
-				.addText(text => text
-					.setPlaceholder('Tag (added to frontmatter tags)')
-					.setValue(mapping.tag || '')
-					.onChange(async (val) => {
-						mapping.tag = val.trim() || undefined;
-						await this.plugin.saveSettings();
-					}))
-				.addText(text => text
-					.setPlaceholder('Context (e.g. work, personal)')
-					.setValue(mapping.context || '')
-					.onChange(async (val) => {
-						mapping.context = val.trim() || undefined;
-						await this.plugin.saveSettings();
-					}))
+				.addText(text => {
+					text.inputEl.style.width = '100px';
+					return text
+						.setPlaceholder('Tag')
+						.setValue(mapping.tag || '')
+						.onChange(async (val) => {
+							mapping.tag = val.trim() || undefined;
+							await this.plugin.saveSettings();
+						});
+				})
+				.addText(text => {
+					text.inputEl.style.width = '100px';
+					return text
+						.setPlaceholder('Context')
+						.setValue(mapping.context || '')
+						.onChange(async (val) => {
+							mapping.context = val.trim() || undefined;
+							await this.plugin.saveSettings();
+						});
+				})
 				.addExtraButton(btn => btn
 					.setIcon('trash')
 					.setTooltip('Remove mapping')
@@ -192,6 +199,20 @@ export class TickTickSettingTab extends PluginSettingTab {
 			setting.controlEl.style.justifyContent = 'flex-start';
 			setting.infoEl.style.flex = '0 0 auto';
 			setting.infoEl.style.marginRight = '20px';
+			setting.settingEl.style.borderBottom = 'none';
+			setting.settingEl.style.paddingBottom = '0';
+
+			const toggleSetting = new Setting(containerEl)
+				.setName('└─ Sync Note Body')
+				.setDesc('When enabled, local changes to the Obsidian note will overwrite the TickTick task description.')
+				.addToggle(toggle => toggle
+					.setValue(mapping.syncBody ?? false)
+					.onChange(async (val) => {
+						mapping.syncBody = val;
+						await this.plugin.saveSettings();
+					}));
+
+			toggleSetting.settingEl.style.paddingTop = '10px';
 		});
 
 		new Setting(containerEl)
@@ -201,7 +222,8 @@ export class TickTickSettingTab extends PluginSettingTab {
 					this.plugin.settings.listMappings.push({
 						listId: '',
 						listName: '',
-						folder: ''
+						folder: '',
+						syncBody: false
 					});
 					await this.plugin.saveSettings();
 					this.renderSettings();

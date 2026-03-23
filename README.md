@@ -44,6 +44,10 @@ context: work
 
 On first sync, the plugin prepends an `obsidian://` deep link to the task's content in TickTick so you can jump straight from TickTick to the corresponding note. Existing task content is preserved — the link is added only once. When a task is completed and moved to the archive folder, the plugin also automatically updates this link in TickTick to point to the new archive location.
 
+### Two-way content sync (Optional)
+
+You can enable **Sync Note Body** on a per-list basis. When enabled, any changes made to the note body in Obsidian will be synced back and overwrite the TickTick task description, provided the local note was modified more recently than the TickTick task.
+
 ### Completed task archiving
 
 When a task is marked complete in TickTick, the plugin moves its note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your active workspace clean while retaining a dated archive. It also updates the `status` to `done` and populates the `completed_time`.
@@ -60,6 +64,7 @@ Map any number of TickTick lists to Obsidian folders. Each mapping supports:
 - **Obsidian folder** — vault-relative path where task notes are created (auto-created if missing).
 - **Tag** — an extra tag appended to the note's frontmatter `tags` array.
 - **Context** — a freeform label written as the `context` frontmatter field.
+- **Sync Note Body** — toggle to sync locally modified note body content back to the TickTick task description.
 
 ### Desktop browser login
 
@@ -110,7 +115,7 @@ Authentication is handled by opening a TickTick sign-in window directly inside O
 | **New task** | A Markdown file is created with frontmatter + task content. An `obsidian://` link is written back to the TickTick task. |
 | **Existing task** | Only the YAML frontmatter is refreshed. Your note body is untouched. |
 | **Completed task** | The note is moved to `<folder>/done/YYYY/MM/`. Frontmatter `status` changes to `done`. The `obsidian://` link in TickTick is updated. If a copy already exists there, the active file is trashed to avoid duplicates. |
-| **TickTick task content** | Never overwritten after the initial `obsidian://` link is added, except to update the link if the note moves. |
+| **TickTick task content** | If "Sync Note Body" is disabled (default), it is never overwritten after the initial `obsidian://` link is added. If enabled, the task description gets overwritten by the Obsidian note body whenever the note has been modified more recently than the task. |
 
 ## Development
 
