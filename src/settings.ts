@@ -11,6 +11,20 @@ export interface TickTickListMapping {
 	syncBody?: boolean;
 }
 
+export interface TickTickFieldMappings {
+	source: string;
+	ticktickId: string;
+	ticktickUrl: string;
+	ticktickList: string;
+	status: string;
+	priority: string;
+	startDate: string;
+	dueDate: string;
+	completedTime: string;
+	tags: string;
+	context: string;
+}
+
 export interface TickTickSyncSettings {
 	cookie: string;
 	vaultName: string;
@@ -18,6 +32,7 @@ export interface TickTickSyncSettings {
 	listMappings: TickTickListMapping[];
 	autoSync: boolean;
 	syncInterval: number;
+	fieldMappings: TickTickFieldMappings;
 
 	// Deprecated, keeping temporarily for migration
 	listMapping?: string;
@@ -32,6 +47,19 @@ export const DEFAULT_SETTINGS: TickTickSyncSettings = {
 	listMappings: [],
 	autoSync: false,
 	syncInterval: 15,
+	fieldMappings: {
+		source: 'source',
+		ticktickId: 'ticktick_id',
+		ticktickUrl: 'ticktick_url',
+		ticktickList: 'ticktick_list',
+		status: 'status',
+		priority: 'priority',
+		startDate: 'start_date',
+		dueDate: 'due_date',
+		completedTime: 'completed_time',
+		tags: 'tags',
+		context: 'context',
+	},
 };
 
 export class TickTickSettingTab extends PluginSettingTab {
@@ -256,5 +284,32 @@ export class TickTickSettingTab extends PluginSettingTab {
 						this.plugin.setupAutoSync();
 					}
 				}));
+
+		containerEl.createEl('h3', { text: 'Field Mappings' });
+
+		const createFieldMappingSetting = (name: string, desc: string, key: keyof TickTickFieldMappings, defaultVal: string) => {
+			new Setting(containerEl)
+				.setName(name)
+				.setDesc(desc)
+				.addText(text => text
+					.setPlaceholder(defaultVal)
+					.setValue(this.plugin.settings.fieldMappings[key])
+					.onChange(async (val) => {
+						this.plugin.settings.fieldMappings[key] = val.trim() || defaultVal;
+						await this.plugin.saveSettings();
+					}));
+		};
+
+		createFieldMappingSetting('Source Field', 'Frontmatter property for the source (e.g. "TickTick").', 'source', 'source');
+		createFieldMappingSetting('TickTick ID Field', 'Frontmatter property for the task ID.', 'ticktickId', 'ticktick_id');
+		createFieldMappingSetting('TickTick URL Field', 'Frontmatter property for the task URL.', 'ticktickUrl', 'ticktick_url');
+		createFieldMappingSetting('TickTick List Field', 'Frontmatter property for the TickTick list name.', 'ticktickList', 'ticktick_list');
+		createFieldMappingSetting('Status Field', 'Frontmatter property for status (in-progress or done).', 'status', 'status');
+		createFieldMappingSetting('Priority Field', 'Frontmatter property for priority.', 'priority', 'priority');
+		createFieldMappingSetting('Start Date Field', 'Frontmatter property for the start date.', 'startDate', 'start_date');
+		createFieldMappingSetting('Due Date Field', 'Frontmatter property for the due date.', 'dueDate', 'due_date');
+		createFieldMappingSetting('Completed Time Field', 'Frontmatter property for the completion time.', 'completedTime', 'completed_time');
+		createFieldMappingSetting('Tags Field', 'Frontmatter property for tags.', 'tags', 'tags');
+		createFieldMappingSetting('Context Field', 'Frontmatter property for the context mapping.', 'context', 'context');
 	}
 }

@@ -153,17 +153,18 @@ export class TickTickSync {
 	}
 
 	private generateFrontmatter(task: TickTickTask, mapping?: TickTickListMapping): string {
+		const fields = this.plugin.settings.fieldMappings;
 		let fm = '---\n';
-		fm += `source: 'TickTick'\n`;
-		fm += `ticktick_id: ${task.id}\n`;
-		fm += `ticktick_url: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
-		if (mapping?.listName) fm += `ticktick_list: ${mapping.listName}\n`;
-		fm += `status: "${task.status === 2 ? 'done' : 'in-progress'}"\n`;
-		fm += `priority: ${this.priorityToLabel(task.priority || 0)}\n`;
+		fm += `${fields.source}: 'TickTick'\n`;
+		fm += `${fields.ticktickId}: ${task.id}\n`;
+		fm += `${fields.ticktickUrl}: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
+		if (mapping?.listName) fm += `${fields.ticktickList}: ${mapping.listName}\n`;
+		fm += `${fields.status}: "${task.status === 2 ? 'done' : 'in-progress'}"\n`;
+		fm += `${fields.priority}: ${this.priorityToLabel(task.priority || 0)}\n`;
 
-		if (task.startDate) fm += `start_date: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
-		if (task.dueDate) fm += `due_date: ${this.formatDateWithTimezone(task.dueDate, task.timeZone)}\n`;
-		if (task.completedTime) fm += `completed_time: ${this.formatDateWithTimezone(task.completedTime, task.timeZone)}\n`;
+		if (task.startDate) fm += `${fields.startDate}: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
+		if (task.dueDate) fm += `${fields.dueDate}: ${this.formatDateWithTimezone(task.dueDate, task.timeZone)}\n`;
+		if (task.completedTime) fm += `${fields.completedTime}: ${this.formatDateWithTimezone(task.completedTime, task.timeZone)}\n`;
 
 		// Merge TickTick tags with the global tag and the per-list tag from settings
 		const globalTag = this.plugin.settings.globalTag;
@@ -175,11 +176,11 @@ export class TickTickSync {
 			allTags.push(mapping.tag);
 		}
 		if (allTags.length > 0) {
-			fm += `tags:\n${allTags.map(t => `  - ${t}`).join('\n')}\n`;
+			fm += `${fields.tags}:\n${allTags.map(t => `  - ${t}`).join('\n')}\n`;
 		}
 
 		if (mapping?.context) {
-			fm += `context: ${mapping.context}\n`;
+			fm += `${fields.context}: ${mapping.context}\n`;
 		}
 
 		fm += '---\n\n';
@@ -201,24 +202,26 @@ export class TickTickSync {
 	 * preserving any custom fields the user has added.
 	 */
 	private async refreshFrontmatter(file: TFile, task: TickTickTask, mapping?: TickTickListMapping): Promise<void> {
+		const fields = this.plugin.settings.fieldMappings;
 		await this.app.fileManager.processFrontMatter(file, (fm: any) => {
-			fm['ticktick_id'] = task.id;
-			fm['ticktick_url'] = `https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}`;
+			fm[fields.source] = 'TickTick';
+			fm[fields.ticktickId] = task.id;
+			fm[fields.ticktickUrl] = `https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}`;
 
 			if (mapping?.listName) {
-				fm['ticktick_list'] = mapping.listName;
+				fm[fields.ticktickList] = mapping.listName;
 			}
 
-			fm['status'] = task.status === 2 ? 'done' : 'in-progress';
-			fm['priority'] = this.priorityToLabel(task.priority || 0);
+			fm[fields.status] = task.status === 2 ? 'done' : 'in-progress';
+			fm[fields.priority] = this.priorityToLabel(task.priority || 0);
 
-			if (task.startDate) fm['start_date'] = this.formatDateWithTimezone(task.startDate, task.timeZone);
-			if (task.dueDate) fm['due_date'] = this.formatDateWithTimezone(task.dueDate, task.timeZone);
-			if (task.completedTime) fm['completed_time'] = this.formatDateWithTimezone(task.completedTime, task.timeZone);
+			if (task.startDate) fm[fields.startDate] = this.formatDateWithTimezone(task.startDate, task.timeZone);
+			if (task.dueDate) fm[fields.dueDate] = this.formatDateWithTimezone(task.dueDate, task.timeZone);
+			if (task.completedTime) fm[fields.completedTime] = this.formatDateWithTimezone(task.completedTime, task.timeZone);
 
 			// Safely merge tags
 			const globalTag = this.plugin.settings.globalTag;
-			const existingTags: string[] = Array.isArray(fm['tags']) ? fm['tags'] : [];
+			const existingTags: string[] = Array.isArray(fm[fields.tags]) ? fm[fields.tags] : [];
 			const taskTags: string[] = task.tags || [];
 
 			const allTags = new Set([...existingTags, ...taskTags]);
@@ -226,11 +229,11 @@ export class TickTickSync {
 			if (mapping?.tag) allTags.add(mapping.tag);
 
 			if (allTags.size > 0) {
-				fm['tags'] = Array.from(allTags);
+				fm[fields.tags] = Array.from(allTags);
 			}
 
 			if (mapping?.context) {
-				fm['context'] = mapping.context;
+				fm[fields.context] = mapping.context;
 			}
 		});
 
@@ -239,9 +242,10 @@ export class TickTickSync {
 
 	private findFileByTickTickId(taskId: string): TFile | null {
 		const allFiles = this.app.vault.getMarkdownFiles();
+		const fields = this.plugin.settings.fieldMappings;
 		for (const file of allFiles) {
 			const cache = this.app.metadataCache.getFileCache(file);
-			if (cache?.frontmatter?.ticktick_id === taskId) {
+			if (cache?.frontmatter?.[fields.ticktickId] === taskId) {
 				return file;
 			}
 		}
@@ -349,12 +353,13 @@ export class TickTickSync {
 		}
 
 		if (file) {
+			const fields = this.plugin.settings.fieldMappings;
 			// Update frontmatter to include completed_time and status to done before moving
 			await this.app.fileManager.processFrontMatter(file, (fm: any) => {
-				fm['status'] = 'done';
-				if (!fm['completed_time']) {
+				fm[fields.status] = 'done';
+				if (!fm[fields.completedTime]) {
 					const timeToUse = task.completedTime || new Date().toISOString();
-					fm['completed_time'] = this.formatDateWithTimezone(timeToUse, task.timeZone);
+					fm[fields.completedTime] = this.formatDateWithTimezone(timeToUse, task.timeZone);
 				}
 			});
 

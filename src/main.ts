@@ -63,6 +63,13 @@ export default class TickTickSyncPlugin extends Plugin {
 	async loadSettings() {
 		this.settings = Object.assign({}, DEFAULT_SETTINGS, await this.loadData());
 		
+		// Fallback for field mappings to ensure defaults exist
+		if (!this.settings.fieldMappings) {
+			this.settings.fieldMappings = Object.assign({}, DEFAULT_SETTINGS.fieldMappings);
+		} else {
+			this.settings.fieldMappings = Object.assign({}, DEFAULT_SETTINGS.fieldMappings, this.settings.fieldMappings);
+		}
+		
 		// Migration from string mapping to array mapping
 		if (this.settings.listMapping && (!this.settings.listMappings || this.settings.listMappings.length === 0)) {
 			console.log('TickTick Sync: Migrating list mapping settings format');
