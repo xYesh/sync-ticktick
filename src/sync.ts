@@ -237,22 +237,50 @@ export class TickTickSync {
 		console.log(`[TickTick Sync] Refreshed frontmatter: ${file.path}`);
 	}
 
+	private findFileByTickTickId(taskId: string): TFile | null {
+		const allFiles = this.app.vault.getMarkdownFiles();
+		for (const file of allFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			if (cache?.frontmatter?.ticktick_id === taskId) {
+				return file;
+			}
+		}
+		return null;
+	}
+
 	private async createOrUpdateTaskFile(task: TickTickTask, folderPath: string, vaultName?: string, mapping?: TickTickListMapping): Promise<void> {
-		const fileName = `${this.sanitizeFileName(task.title)}.md`;
-		const filePath = normalizePath(`${folderPath}/${fileName}`);
+		const expectedFileName = `${this.sanitizeFileName(task.title)}.md`;
+		const targetFilePath = normalizePath(`${folderPath}/${expectedFileName}`);
+
+		let file = this.findFileByTickTickId(task.id);
+
+		// Fallback to path if not found by ID (e.g. metadataCache not updated yet for brand new files)
+		if (!file) {
+			const byPath = this.app.vault.getAbstractFileByPath(targetFilePath);
+			if (byPath instanceof TFile) file = byPath;
+		}
 
 		let obsidianBody = '';
 		let fileMtime = 0;
 
-		const file = this.app.vault.getAbstractFileByPath(filePath);
 		if (!file) {
-			console.log(`[TickTick Sync] Creating file: ${filePath}`);
+			console.log(`[TickTick Sync] Creating file: ${targetFilePath}`);
 			obsidianBody = (task.content || '').trim();
 			const content = this.generateFrontmatter(task, mapping) + obsidianBody;
-			await this.app.vault.create(filePath, content);
+			file = await this.app.vault.create(targetFilePath, content);
 			// New file: acts as if modified just now
 			fileMtime = Date.now();
-		} else if (file instanceof TFile) {
+		} else {
+			// Rename file if title changed
+			if (file.name !== expectedFileName) {
+				const newFilePath = normalizePath(`${file.parent?.path || folderPath}/${expectedFileName}`);
+				const existingTarget = this.app.vault.getAbstractFileByPath(newFilePath);
+				if (!existingTarget) {
+					console.log(`[TickTick Sync] Renaming file from ${file.name} to ${expectedFileName}`);
+					await this.app.fileManager.renameFile(file, newFilePath);
+				}
+			}
+
 			fileMtime = file.stat.mtime;
 
 			// Update the frontmatter in the existing file with the latest values from TickTick
@@ -269,7 +297,8 @@ export class TickTickSync {
 			return;
 		}
 
-		const vaultRelativePath = filePath.endsWith('.md') ? filePath.slice(0, -3) : filePath;
+		const finalFilePath = file.path;
+		const vaultRelativePath = finalFilePath.endsWith('.md') ? finalFilePath.slice(0, -3) : finalFilePath;
 		const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
 		const obsidianLink = `[📝 Open note in Obsidian](${obsidianUri})`;
 
@@ -310,11 +339,16 @@ export class TickTickSync {
 	}
 
 	private async moveTaskToDone(task: TickTickTask, folderPath: string, vaultName?: string): Promise<void> {
-		const fileName = `${this.sanitizeFileName(task.title)}.md`;
-		const activeFilePath = normalizePath(`${folderPath}/${fileName}`);
+		const expectedFileName = `${this.sanitizeFileName(task.title)}.md`;
 
-		const file = this.app.vault.getAbstractFileByPath(activeFilePath);
-		if (file && file instanceof TFile) {
+		let file = this.findFileByTickTickId(task.id);
+		if (!file) {
+			const activeFilePath = normalizePath(`${folderPath}/${expectedFileName}`);
+			const byPath = this.app.vault.getAbstractFileByPath(activeFilePath);
+			if (byPath instanceof TFile) file = byPath;
+		}
+
+		if (file) {
 			// Update frontmatter to include completed_time and status to done before moving
 			await this.app.fileManager.processFrontMatter(file, (fm: any) => {
 				fm['status'] = 'done';
@@ -344,7 +378,7 @@ export class TickTickSync {
 
 			await this.ensureFolderExists(doneFolderMonthPath);
 
-			const newFilePath = normalizePath(`${doneFolderMonthPath}/${fileName}`);
+			const newFilePath = normalizePath(`${doneFolderMonthPath}/${expectedFileName}`);
 
 			const existingDoneFile = this.app.vault.getAbstractFileByPath(newFilePath);
 			if (!existingDoneFile) {
