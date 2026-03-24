@@ -385,6 +385,10 @@ export class TickTickSync {
 
 			const newFilePath = normalizePath(`${doneFolderMonthPath}/${expectedFileName}`);
 
+			if (file.path === newFilePath) {
+				return;
+			}
+
 			const existingDoneFile = this.app.vault.getAbstractFileByPath(newFilePath);
 			if (!existingDoneFile) {
 				await this.app.fileManager.renameFile(file, newFilePath);
