@@ -48,9 +48,17 @@ On first sync, the plugin prepends an `obsidian://` deep link to the task's cont
 
 You can enable **Sync Note Body** on a per-list basis. When enabled, any changes made to the note body in Obsidian will be synced back and overwrite the TickTick task description, provided the local note was modified more recently than the TickTick task.
 
+#### Sync Conflict Flow
+The two-way sync automatically resolves conflicts by comparing the precise Last Modified time of your local note against the last updated time of the task in TickTick. If the Obsidian note was edited *more recently* than the TickTick task, your local Obsidian content wins and is pushed to TickTick. If the TickTick task is newer, your local body is left completely untouched.
+
 ### Completed task archiving
 
-When a task is marked complete in TickTick, the plugin moves its note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your active workspace clean while retaining a dated archive. It also updates the `status` to `done` and populates the `completed_time`.
+When a task is marked complete in TickTick, the plugin moves its existing active note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your workspace clean while retaining a dated archive. It also updates the `status` to `done` and populates the `completed_time`.
+
+#### Archive Conflict Flow
+If a note with the exact same name already exists in the `done` folder, the plugin safely resolves the collision by appending a unique timestamp suffix (e.g., `Task Name_1711234567.md`) to the newly archived note. **Your files are never deleted or silently overwritten**, guaranteeing that both the existing archived note and the newly completed note are securely preserved side-by-side in your vault.
+
+> **Note**: The plugin ONLY archives tasks that were previously synced as active. Tasks that are created and completed entirely within TickTick before syncing will be ignored, preventing your vault from being cluttered with unnecessary historical notes!
 
 ### Automatic background sync
 
@@ -114,7 +122,7 @@ Authentication is handled by opening a TickTick sign-in window directly inside O
 |---|---|
 | **New task** | A Markdown file is created with frontmatter + task content. An `obsidian://` link is written back to the TickTick task. |
 | **Existing task** | Only the YAML frontmatter is refreshed. Your note body is untouched. |
-| **Completed task** | The note is moved to `<folder>/done/YYYY/MM/`. Frontmatter `status` changes to `done`. The `obsidian://` link in TickTick is updated. If a copy already exists there, the active file is trashed to avoid duplicates. |
+| **Completed task** | The active note is moved to `<folder>/done/YYYY/MM/`. Frontmatter `status` changes to `done`. If a duplicate note already exists in the done folder, the active file is preserved under a unique timestamped name. Only active notes are archived (tasks closed strictly within TickTick without being synced are skipped). |
 | **TickTick task content** | If "Sync Note Body" is disabled (default), it is never overwritten after the initial `obsidian://` link is added. If enabled, the task description gets overwritten by the Obsidian note body whenever the note has been modified more recently than the task. |
 
 ## Development

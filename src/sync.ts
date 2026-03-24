@@ -418,8 +418,11 @@ export class TickTickSync {
 					}
 				}
 			} else {
-				// We'll just delete the active one if it's already in done to prevent dupes hanging around
-				await this.app.vault.trash(file, true);
+				// To ensure files are never deleted, even in the event of a duplicate file name or collision, 
+				// we rename it with a unique suffix instead of trashing it.
+				const uniqueFileName = `${expectedFileName.slice(0, -3)}_${Date.now()}.md`;
+				const fallbackPath = normalizePath(`${doneFolderMonthPath}/${uniqueFileName}`);
+				await this.app.fileManager.renameFile(file, fallbackPath);
 			}
 		}
 	}
