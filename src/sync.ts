@@ -353,6 +353,12 @@ export class TickTickSync {
 		}
 
 		if (file) {
+			const doneFolderBasePath = normalizePath(`${folderPath}/done`);
+			// If already in the done folder, don't update frontmatter or move it again
+			if (file.path.startsWith(doneFolderBasePath + '/')) {
+				return;
+			}
+
 			const fields = this.plugin.settings.fieldMappings;
 			// Update frontmatter to include completed_time and status to done before moving
 			await this.app.fileManager.processFrontMatter(file, (fm: any) => {
@@ -377,7 +383,6 @@ export class TickTickSync {
 				month = (new Date().getMonth() + 1).toString().padStart(2, '0');
 			}
 
-			const doneFolderBasePath = normalizePath(`${folderPath}/done`);
 			const doneFolderYearPath = normalizePath(`${doneFolderBasePath}/${year}`);
 			const doneFolderMonthPath = normalizePath(`${doneFolderYearPath}/${month}`);
 
