@@ -10,6 +10,7 @@ export interface TickTickListMapping {
 	context?: string;
 	syncBody?: boolean;
 	reverseSync?: boolean;
+	localCopy?: boolean;
 }
 
 export interface TickTickFieldMappings {
@@ -231,29 +232,27 @@ export class TickTickSettingTab extends PluginSettingTab {
 			setting.settingEl.style.borderBottom = 'none';
 			setting.settingEl.style.paddingBottom = '0';
 
-			const toggleSetting = new Setting(containerEl)
-				.setName('└─ Sync Note Body')
-				.setDesc('When enabled, local changes to the Obsidian note will overwrite the TickTick task description.')
-				.addToggle(toggle => toggle
-					.setValue(mapping.syncBody ?? false)
+			const strategySetting = new Setting(containerEl)
+				.setName('└─ Sync Strategy')
+				.setDesc('Choose how tasks and notes synchronize for this list mapping.')
+				.addDropdown(dropdown => dropdown
+					.addOption('default', 'Default (Frontmatter Only)')
+					.addOption('syncBody', 'Split Source (TickTick Frontmatter, Obsidian Body)')
+					.addOption('reverseSync', 'Reverse Sync (Obsidian as Source of Truth)')
+					.addOption('localCopy', 'Local Copy (TickTick as Source of Truth)')
+					.setValue(
+						mapping.localCopy ? 'localCopy' :
+						mapping.reverseSync ? 'reverseSync' :
+						mapping.syncBody ? 'syncBody' : 'default'
+					)
 					.onChange(async (val) => {
-						mapping.syncBody = val;
+						mapping.syncBody = val === 'syncBody';
+						mapping.reverseSync = val === 'reverseSync';
+						mapping.localCopy = val === 'localCopy';
 						await this.plugin.saveSettings();
 					}));
-
-			toggleSetting.settingEl.style.paddingTop = '10px';
-
-			const reverseSyncSetting = new Setting(containerEl)
-				.setName('└─ Reverse Sync')
-				.setDesc('When enabled, notes in this folder act as the source of truth and are synced back to TickTick.')
-				.addToggle(toggle => toggle
-					.setValue(mapping.reverseSync ?? false)
-					.onChange(async (val) => {
-						mapping.reverseSync = val;
-						await this.plugin.saveSettings();
-					}));
-
-			reverseSyncSetting.settingEl.style.paddingTop = '10px';
+			
+			strategySetting.settingEl.style.paddingTop = '10px';
 		});
 
 		new Setting(containerEl)
@@ -265,7 +264,8 @@ export class TickTickSettingTab extends PluginSettingTab {
 						listName: '',
 						folder: '',
 						syncBody: false,
-						reverseSync: false
+						reverseSync: false,
+						localCopy: false
 					});
 					await this.plugin.saveSettings();
 					this.renderSettings();

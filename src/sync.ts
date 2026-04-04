@@ -418,6 +418,22 @@ export class TickTickSync {
 			// Read the file structure to get the user's obsidian content body
 			const existing = await this.app.vault.read(file);
 			obsidianBody = this.getFileBody(existing);
+
+			if (mapping?.localCopy) {
+				const mdLinkRegex = /\[📝 Open note in Obsidian\]\(obsidian:\/\/.*?\)/g;
+				const rawLinkRegex = /obsidian:\/\/open\?vault=[^&\s]+&file=[^\s)]+/g;
+
+				const cleanTickTickContent = (task.content || '')
+					.replace(mdLinkRegex, '')
+					.replace(rawLinkRegex, '')
+					.trim();
+
+				obsidianBody = cleanTickTickContent;
+
+				const closeIdx = existing.indexOf('\n---', 3);
+				const frontmatterPart = closeIdx !== -1 ? existing.slice(0, closeIdx + 4) + '\n' : '---\n---\n';
+				await this.app.vault.modify(file, frontmatterPart + obsidianBody);
+			}
 		}
 
 		// Write Obsidian URI & content back to the TickTick task

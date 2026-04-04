@@ -80,8 +80,11 @@ Map any number of TickTick lists to Obsidian folders. Each mapping supports:
 - **Obsidian folder** — vault-relative path where task notes are created (auto-created if missing).
 - **Tag** — an extra tag appended to the note's frontmatter `tags` array.
 - **Context** — a freeform label written as the `context` frontmatter field.
-- **Sync Note Body** — toggle to sync locally modified note body content back to the TickTick task description.
-- **Reverse Sync** — toggle to treat the Obsidian folder as the absolute source of truth and prioritize syncing from Obsidian to TickTick.
+- **Sync Strategy** — defines how tasks and notes synchronize. Choose between:
+  - *Default:* One-way task sync that only refreshes YAML frontmatter locally.
+  - *Split Source:* Uses TickTick as the absolute truth for frontmatter properties, and Obsidian as the source of truth for the body description.
+  - *Reverse Sync:* Treats Obsidian as the absolute source of truth, pushing all states back up.
+  - *Local Copy:* Treats TickTick as the absolute source of truth, pulling state and overwriting local changes.
 
 ### Desktop browser login
 
