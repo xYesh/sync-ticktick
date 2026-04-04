@@ -44,12 +44,10 @@ context: work
 
 On first sync, the plugin prepends an `obsidian://` deep link to the task's content in TickTick so you can jump straight from TickTick to the corresponding note. Existing task content is preserved — the link is added only once. When a task is completed and moved to the archive folder, the plugin also automatically updates this link in TickTick to point to the new archive location.
 
-### Two-way content sync (Optional)
+### Sync Note Body (Optional)
 
 You can enable **Sync Note Body** on a per-list basis. When enabled, any changes made to the note body in Obsidian will be synced back and overwrite the TickTick task description, provided the local note was modified more recently than the TickTick task.
 
-#### Sync Conflict Flow
-The two-way sync automatically resolves conflicts by comparing the precise Last Modified time of your local note against the last updated time of the task in TickTick. If the Obsidian note was edited *more recently* than the TickTick task, your local Obsidian content wins and is pushed to TickTick. If the TickTick task is newer, your local body is left completely untouched.
 
 ### Reverse Sync (Obsidian → TickTick)
 
