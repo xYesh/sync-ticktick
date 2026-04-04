@@ -6,7 +6,7 @@ export interface TickTickTask {
 	title: string;
 	content: string;
 	priority: number; // 0, 1, 3, 5
-	status: number; // 0 = uncompleted, 2 = completed
+	status: number; // 0 = uncompleted, 2 = completed, -1 = won't do
 	startDate?: string;
 	dueDate?: string;
 	timeZone?: string;

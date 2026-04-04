@@ -63,12 +63,18 @@ export class TickTickSync {
 				const folderPath = normalizePath(mapping.folder);
 				await this.ensureFolderExists(folderPath);
 
-				// Sync active tasks — filter out completed ones (status 2) the API may include
+				// Sync active tasks — filter out completed ones (status 2) and won't do (-1)
 				const allTasks = await this.api.getTasksByProjectId(projectId);
-				const tasks = allTasks.filter(t => t.status !== 2);
-				console.log(`[TickTick Sync] Project "${mapping.listName || projectId}": ${tasks.length} active tasks (${allTasks.length - tasks.length} completed filtered out)`);
+				const tasks = allTasks.filter(t => t.status !== 2 && t.status !== -1);
+				console.log(`[TickTick Sync] Project "${mapping.listName || projectId}": ${tasks.length} active tasks (${allTasks.length - tasks.length} completed/won't do filtered out)`);
 				for (const task of tasks) {
 					await this.createOrUpdateTaskFile(task, folderPath, vaultName, mapping);
+				}
+
+				// Process won't do tasks that are returned in the active tasks endpoint
+				const wontDoTasks = allTasks.filter(t => t.status === -1);
+				for (const task of wontDoTasks) {
+					await this.moveTaskToDone(task, folderPath, vaultName);
 				}
 
 				// Sync completed tasks
@@ -159,7 +165,7 @@ export class TickTickSync {
 		fm += `${fields.ticktickId}: ${task.id}\n`;
 		fm += `${fields.ticktickUrl}: https://ticktick.com/webapp/#p/${task.projectId}/tasks/${task.id}\n`;
 		if (mapping?.listName) fm += `${fields.ticktickList}: ${mapping.listName}\n`;
-		fm += `${fields.status}: "${task.status === 2 ? 'done' : 'in-progress'}"\n`;
+		fm += `${fields.status}: "${(task.status === 2 || task.status === -1) ? 'done' : 'in-progress'}"\n`;
 		fm += `${fields.priority}: ${this.priorityToLabel(task.priority || 0)}\n`;
 
 		if (task.startDate) fm += `${fields.startDate}: ${this.formatDateWithTimezone(task.startDate, task.timeZone)}\n`;
@@ -212,7 +218,7 @@ export class TickTickSync {
 				fm[fields.ticktickList] = mapping.listName;
 			}
 
-			fm[fields.status] = task.status === 2 ? 'done' : 'in-progress';
+			fm[fields.status] = (task.status === 2 || task.status === -1) ? 'done' : 'in-progress';
 			fm[fields.priority] = this.priorityToLabel(task.priority || 0);
 
 			if (task.startDate) fm[fields.startDate] = this.formatDateWithTimezone(task.startDate, task.timeZone);
