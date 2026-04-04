@@ -1,5 +1,5 @@
 import { App, Notice, TFile, TFolder, normalizePath } from 'obsidian';
-import { TickTickAPI, TickTickTask } from './api';
+import { TickTickAPI, TickTickTask, generateTickTickId } from './api';
 import type TickTickSyncPlugin from './main';
 import type { TickTickListMapping } from './settings';
 
@@ -63,6 +63,11 @@ export class TickTickSync {
 				const folderPath = normalizePath(mapping.folder);
 				await this.ensureFolderExists(folderPath);
 
+				if (mapping.reverseSync) {
+					await this.performReverseSync(folderPath, projectId, vaultName, mapping);
+					continue;
+				}
+
 				// Sync active tasks — filter out completed ones (status 2) and won't do (-1)
 				const allTasks = await this.api.getTasksByProjectId(projectId);
 				const tasks = allTasks.filter(t => t.status !== 2 && t.status !== -1);
@@ -112,6 +117,120 @@ export class TickTickSync {
 
 	private sanitizeFileName(name: string): string {
 		return name.replace(/[\\/:"*?<>|]/g, '_').trim();
+	}
+
+	private async performReverseSync(folderPath: string, projectId: string, vaultName: string, mapping: TickTickListMapping): Promise<void> {
+		console.log(`[TickTick Sync] Performing reverse sync for ${folderPath}`);
+		const folder = this.app.vault.getAbstractFileByPath(folderPath);
+		if (!(folder instanceof TFolder)) return;
+
+		const fields = this.plugin.settings.fieldMappings;
+		const adds: Partial<TickTickTask>[] = [];
+		const updates: Partial<TickTickTask>[] = [];
+		const allProcessedFiles: {file: TFile, id: string}[] = [];
+
+		const markdownFiles = this.app.vault.getMarkdownFiles().filter(f => f.path.startsWith(folderPath + '/'));
+
+		for (const file of markdownFiles) {
+			const cache = this.app.metadataCache.getFileCache(file);
+			const fm = cache?.frontmatter || {};
+
+			const fileContent = await this.app.vault.read(file);
+			let obsidianBody = this.getFileBody(fileContent);
+			
+			// Obsidian link
+			const vaultRelativePath = file.path.endsWith('.md') ? file.path.slice(0, -3) : file.path;
+			const obsidianUri = this.buildObsidianUri(vaultName, vaultRelativePath);
+			const obsidianLink = `[📝 Open note in Obsidian](${obsidianUri})`;
+
+			// If body doesn't contain link, prepend it
+			if (!obsidianBody.includes('obsidian://')) {
+				obsidianBody = `${obsidianLink}\n\n${obsidianBody}`;
+			}
+
+			const title = file.basename;
+			const isDonePath = file.path.startsWith(folderPath + '/done/');
+			const status = isDonePath || fm[fields.status] === 'done' ? 2 : 0;
+			
+			let priority = 0;
+			const fmPriority = fm[fields.priority];
+			if (fmPriority) {
+				const pStr = fmPriority.toString().toLowerCase();
+				if (pStr === 'high' || pStr === '5') priority = 5;
+				else if (pStr === 'medium' || pStr === '3') priority = 3;
+				else if (pStr === 'low' || pStr === '1') priority = 1;
+			}
+
+			const kind = fm['TickTick_Type'] === 'Note' ? 'NOTE' : 'TEXT';
+
+			const ticktickId = fm[fields.ticktickId];
+
+			let tags: string[] = [];
+			if (fm[fields.tags]) {
+				tags = Array.isArray(fm[fields.tags]) ? fm[fields.tags] : [fm[fields.tags]];
+			}
+			
+			if (this.plugin.settings.globalTag && !tags.includes(this.plugin.settings.globalTag)) tags.push(this.plugin.settings.globalTag);
+			if (mapping.tag && !tags.includes(mapping.tag)) tags.push(mapping.tag);
+
+			const taskPayload: Partial<TickTickTask> = {
+				projectId: projectId,
+				title: title,
+				content: obsidianBody,
+				status: status,
+				priority: priority,
+				kind: kind,
+				tags: tags
+			};
+
+			try {
+				if (fm[fields.startDate]) taskPayload.startDate = new Date(fm[fields.startDate]).toISOString().replace('Z', '+0000');
+				if (fm[fields.dueDate]) taskPayload.dueDate = new Date(fm[fields.dueDate]).toISOString().replace('Z', '+0000');
+			} catch(e) {
+				// ignore invalid dates
+			}
+
+			if (!ticktickId) {
+				// Create new task
+				const newId = generateTickTickId();
+				taskPayload.id = newId;
+				adds.push(taskPayload);
+				allProcessedFiles.push({ file, id: newId });
+			} else {
+				// Update existing task
+				taskPayload.id = ticktickId;
+				updates.push(taskPayload);
+				allProcessedFiles.push({ file, id: ticktickId });
+			}
+		}
+
+		if (adds.length > 0 || updates.length > 0) {
+			console.log(`[TickTick Sync] Reverse Syncing ${adds.length} additions and ${updates.length} updates`);
+			const success = await this.api.syncBatchTasks(adds, updates);
+			if (success) {
+				for (const item of allProcessedFiles) {
+					await this.app.fileManager.processFrontMatter(item.file, (fmData: any) => {
+						fmData[fields.ticktickId] = item.id;
+						fmData[fields.source] = 'TickTick';
+						fmData[fields.ticktickUrl] = `https://ticktick.com/webapp/#p/${projectId}/tasks/${item.id}`;
+						if (mapping.listName) fmData[fields.ticktickList] = mapping.listName;
+						
+						// Ensure all user-visible metadata fields exist for easy editing
+						if (fmData[fields.status] === undefined) fmData[fields.status] = 'in-progress';
+						if (fmData[fields.priority] === undefined) fmData[fields.priority] = 'none';
+						if (fmData[fields.startDate] === undefined) fmData[fields.startDate] = null;
+						if (fmData[fields.dueDate] === undefined) fmData[fields.dueDate] = null;
+						if (fmData[fields.completedTime] === undefined) fmData[fields.completedTime] = null;
+						if (fmData['TickTick_Type'] === undefined) fmData['TickTick_Type'] = fmData.kind === 'NOTE' ? 'Note' : 'Task';
+					});
+				}
+				new Notice(`Reverse synced ${adds.length} new items and ${updates.length} updates for ${mapping.listName || projectId}`);
+			} else {
+				new Notice(`Failed to reverse sync ${mapping.listName || projectId}`);
+			}
+		} else {
+			console.log(`[TickTick Sync] Nothing to reverse sync for ${mapping.listName || projectId}`);
+		}
 	}
 
 	/**

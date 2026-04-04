@@ -33,7 +33,7 @@ context: work
 | `ticktick_id` | Unique TickTick task ID |
 | `ticktick_url` | Direct link to the task in TickTick's web app |
 | `ticktick_list` | Name of the TickTick list mapped to this folder |
-| `status` | `in-progress` or `done` |
+| `status` | `in-progress` or `done` (Note: TickTick "Won't do" tasks are also successfully archived as `done`) |
 | `priority` | `High`, `Medium`, `Low`, or `None` (mapped from TickTick's numeric values) |
 | `start_date` / `due_date` | Formatted with the task's timezone as `YYYY-MM-DD HH:mm` |
 | `completed_time` | Added when a task is marked complete |
@@ -51,9 +51,17 @@ You can enable **Sync Note Body** on a per-list basis. When enabled, any changes
 #### Sync Conflict Flow
 The two-way sync automatically resolves conflicts by comparing the precise Last Modified time of your local note against the last updated time of the task in TickTick. If the Obsidian note was edited *more recently* than the TickTick task, your local Obsidian content wins and is pushed to TickTick. If the TickTick task is newer, your local body is left completely untouched.
 
+### Reverse Sync (Obsidian → TickTick)
+
+You can enable **Reverse Sync** on a per-list basis. When enabled, your Obsidian vault becomes the **absolute Single Source of Truth** for that list mapping.
+
+- **Creating properties:** During a reverse sync, the plugin automatically ensures that every synced Markdown file has all the frontmatter fields ready to edit (e.g., `start_date`, `due_date`, `completed_time` set to `null`). You can fill these in, and the plugin will seamlessly propagate them to TickTick.
+- **Tasks vs Notes:** By default, new notes create standard Tasks in TickTick. However, if you set `TickTick_Type: Note` in the note's frontmatter, it will be automatically created as a Note inside TickTick.
+- **Conflict Resolution:** In Reverse Sync mode, *any changes made in TickTick since the last sync will be overwritten* by the metadata and content present in your Obsidian file.
+
 ### Completed task archiving
 
-When a task is marked complete in TickTick, the plugin moves its existing active note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your workspace clean while retaining a dated archive. It also updates the `status` to `done` and populates the `completed_time`.
+When a task is marked complete (or "Won't do") in TickTick, the plugin moves its existing active note into a `done/YYYY/MM/` subfolder under the mapped folder, keeping your workspace clean while retaining a dated archive. It also updates the `status` to `done` and populates the `completed_time`.
 
 #### Archive Conflict Flow
 If a note with the exact same name already exists in the `done` folder, the plugin safely resolves the collision by appending a unique timestamp suffix (e.g., `Task Name_1711234567.md`) to the newly archived note. **Your files are never deleted or silently overwritten**, guaranteeing that both the existing archived note and the newly completed note are securely preserved side-by-side in your vault.
@@ -73,6 +81,7 @@ Map any number of TickTick lists to Obsidian folders. Each mapping supports:
 - **Tag** — an extra tag appended to the note's frontmatter `tags` array.
 - **Context** — a freeform label written as the `context` frontmatter field.
 - **Sync Note Body** — toggle to sync locally modified note body content back to the TickTick task description.
+- **Reverse Sync** — toggle to treat the Obsidian folder as the absolute source of truth and prioritize syncing from Obsidian to TickTick.
 
 ### Desktop browser login
 

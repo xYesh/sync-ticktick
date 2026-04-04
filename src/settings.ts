@@ -9,6 +9,7 @@ export interface TickTickListMapping {
 	tag?: string;
 	context?: string;
 	syncBody?: boolean;
+	reverseSync?: boolean;
 }
 
 export interface TickTickFieldMappings {
@@ -241,6 +242,18 @@ export class TickTickSettingTab extends PluginSettingTab {
 					}));
 
 			toggleSetting.settingEl.style.paddingTop = '10px';
+
+			const reverseSyncSetting = new Setting(containerEl)
+				.setName('└─ Reverse Sync')
+				.setDesc('When enabled, notes in this folder act as the source of truth and are synced back to TickTick.')
+				.addToggle(toggle => toggle
+					.setValue(mapping.reverseSync ?? false)
+					.onChange(async (val) => {
+						mapping.reverseSync = val;
+						await this.plugin.saveSettings();
+					}));
+
+			reverseSyncSetting.settingEl.style.paddingTop = '10px';
 		});
 
 		new Setting(containerEl)
@@ -251,7 +264,8 @@ export class TickTickSettingTab extends PluginSettingTab {
 						listId: '',
 						listName: '',
 						folder: '',
-						syncBody: false
+						syncBody: false,
+						reverseSync: false
 					});
 					await this.plugin.saveSettings();
 					this.renderSettings();

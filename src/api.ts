@@ -1,5 +1,13 @@
 import { requestUrl, RequestUrlParam, RequestUrlResponse, Notice } from 'obsidian';
 
+export function generateTickTickId(): string {
+	const chars = '0123456789abcdef';
+	let id = '';
+	for (let i = 0; i < 24; i++) {
+		id += chars[Math.floor(Math.random() * 16)];
+	}
+	return id;
+}
 export interface TickTickTask {
 	id: string;
 	projectId: string;
@@ -14,6 +22,7 @@ export interface TickTickTask {
 	tags?: string[];
 	completedTime?: string;
 	modifiedTime?: string;
+	kind?: string;
 }
 
 export interface TickTickProject {
@@ -300,6 +309,68 @@ export class TickTickAPI {
 			return response.status === 200;
 		} catch (error) {
 			console.error(`Failed to update task content for ${task.id}`, error);
+			return false;
+		}
+	}
+
+	public async syncBatchTasks(adds: Partial<TickTickTask>[], updates: Partial<TickTickTask>[]): Promise<boolean> {
+		if (!this.cookie) throw new Error('Not authenticated');
+		try {
+			const payload = {
+				add: adds.map(t => ({
+					...t,
+					modifiedTime: new Date().toISOString().replace('Z', '+0000'),
+				})),
+				addAttachments: [],
+				delete: [],
+				deleteAttachments: [],
+				updateAttachments: [],
+				update: updates.map(t => ({
+					...t,
+					modifiedTime: new Date().toISOString().replace('Z', '+0000'),
+				})),
+			};
+
+			const xDevice = JSON.stringify({
+				platform: 'web',
+				os: 'Windows 10',
+				device: 'Chrome 122.0',
+				name: '',
+				version: 6070,
+				id: '6670a1b2c3d4e5f67890ab12',
+				channel: 'website',
+				campaign: '',
+				websocket: ''
+			});
+
+			const response = await requestUrl({
+				url: 'https://api.ticktick.com/api/v2/batch/task',
+				method: 'POST',
+				headers: {
+					'Cookie': this.cookie,
+					'Content-Type': 'application/json',
+					'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+					'Accept': 'application/json, text/plain, */*',
+					'Origin': 'https://ticktick.com',
+					'Referer': 'https://ticktick.com/',
+					'x-device': xDevice,
+				},
+				body: JSON.stringify(payload),
+				throw: false,
+			});
+
+			console.log(`[TickTick API] syncBatchTasks status: ${response.status}`);
+			if (response.status !== 200) {
+				try {
+					console.error('[TickTick API] Response body:', response.json);
+				} catch {
+					console.error('[TickTick API] Response text:', response.text);
+				}
+			}
+
+			return response.status === 200;
+		} catch (error) {
+			console.error(`Failed to sync batch tasks`, error);
 			return false;
 		}
 	}
